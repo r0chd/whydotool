@@ -16,7 +16,7 @@ Inspired by [ydotool](https://github.com/ReimuNotMoe/ydotool), it leverages nati
 whydotool tries to be fully compatible with ydotool, list of supported ydotool commands:
 
 - [ ] click - Click on mouse buttons
-- [ ] mousemove - Move mouse pointer to absolute position
+- [x] mousemove - Move mouse pointer to absolute position
 - [ ] type - Type a string
 - [x] key - Press keys
 - [ ] stdin - Sends the key presses as it was a keyboard (i.e from ssh)

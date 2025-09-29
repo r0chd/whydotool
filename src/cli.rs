@@ -17,7 +17,24 @@ pub struct Cli {
 #[derive(Parser, Debug)]
 pub enum Commands {
     Click {},
-    MouseMove {},
+    Mousemove {
+        /// Move mouse wheel relatively
+        #[arg(short = 'w', long = "wheel")]
+        wheel: bool,
+
+        /// Use absolute position, not applicable to wheel.
+        /// You need to disable mouse speed acceleration for correct absolute movement.
+        #[arg(short = 'a', long = "absolute")]
+        absolute: bool,
+
+        /// X position
+        #[arg(short = 'x', long = "xpos")]
+        xpos: u32,
+
+        /// Y position
+        #[arg(short = 'y', long = "ypos")]
+        ypos: u32,
+    },
     Type {},
     Key {
         #[arg(value_delimiter = ' ', num_args = 1.., value_parser = parse_keypress)]
