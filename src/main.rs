@@ -29,7 +29,7 @@ impl Whydotool {
         let virtual_pointer = globals
             .bind::<zwlr_virtual_pointer_manager_v1::ZwlrVirtualPointerManagerV1, _, _>(
                 &qh,
-                1..=1,
+                1..=2,
                 (),
             )
             .map(|virtual_pointer_manager| {
@@ -77,20 +77,24 @@ fn main() -> anyhow::Result<()> {
     match cli.cmd {
         Commands::Click {} => unimplemented!(),
         Commands::MouseMove {} => unimplemented!(),
-        Commands::Key { key, key_delay } => match whydotool.virtual_keyboard.take() {
-            Some(mut virtual_keyboard) => {
-                for key_press in key {
-                    virtual_keyboard.key(key_press.keycode, key_press.pressed);
+        Commands::Key {
+            key_presses,
+            key_delay,
+        } => {
+            let mut virtual_keyboard = whydotool.virtual_keyboard.take().ok_or_else(|| {
+                anyhow::anyhow!("Virtual keyboard protocol is not supported by the compositor")
+            })?;
 
-                    event_queue.roundtrip(&mut whydotool);
+            for key_press in key_presses {
+                virtual_keyboard.key(key_press.keycode, key_press.pressed);
 
-                    if let Some(key_delay) = key_delay {
-                        std::thread::sleep(Duration::from_millis(key_delay));
-                    }
+                event_queue.roundtrip(&mut whydotool)?;
+
+                if let Some(key_delay) = key_delay {
+                    std::thread::sleep(Duration::from_millis(key_delay));
                 }
             }
-            None => {}
-        },
+        }
         Commands::Type {} => unimplemented!(),
     }
 

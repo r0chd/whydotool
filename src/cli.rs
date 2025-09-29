@@ -21,7 +21,7 @@ pub enum Commands {
     Type {},
     Key {
         #[arg(value_delimiter = ' ', num_args = 1.., value_parser = parse_keypress)]
-        key: Vec<KeyPress>,
+        key_presses: Vec<KeyPress>,
 
         #[arg(short = 'd', long = "key-delay")]
         key_delay: Option<u64>,
