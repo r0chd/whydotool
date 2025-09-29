@@ -1,0 +1,30 @@
+[workspace]
+members = ["daemon", "ctl", "common"]
+resolver = "2"
+
+[profile.dev]
+opt-level = 1
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+
+[workspace.package]
+keywords = ["idle", "daemon", "wayland", "desktop"]
+categories = [
+  "command-line-utilities",
+  "os",
+]
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/r0chd/clicker-rs"
+version = "0.1.0"
+description = "Idle daemon with conditional timeouts and built in audio inhibitor"
+readme = "README.md"
+
+[workspace.dependencies]
+common = { path = "common" }
