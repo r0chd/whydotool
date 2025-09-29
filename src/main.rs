@@ -7,6 +7,7 @@ use cli::Cli;
 use std::time::Duration;
 use virtual_keyboard::VirtualKeyboard;
 use wayland_client::Proxy;
+use wayland_client::protocol::wl_pointer::ButtonState;
 use wayland_client::{
     Connection, Dispatch, QueueHandle, delegate_dispatch, delegate_noop,
     globals::{GlobalList, GlobalListContents, registry_queue_init},
@@ -161,7 +162,14 @@ fn main() -> anyhow::Result<()> {
     event_queue.roundtrip(&mut whydotool)?;
 
     match cli.cmd {
-        Commands::Click {} => unimplemented!(),
+        Commands::Click {} => {
+            let virtual_pointer = whydotool.virtual_pointer.take().ok_or_else(|| {
+                anyhow::anyhow!("Virtual keyboard protocol is not supported by the compositor")
+            })?;
+
+            virtual_pointer.button(0, 0, ButtonState::Pressed);
+            virtual_pointer.button(0, 0, ButtonState::Released);
+        }
         Commands::Mousemove {
             wheel,
             absolute,
@@ -195,6 +203,7 @@ fn main() -> anyhow::Result<()> {
                 }
             }
 
+            virtual_pointer.frame();
             event_queue.roundtrip(&mut whydotool)?;
         }
         Commands::Key {
