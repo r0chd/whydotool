@@ -8,7 +8,7 @@ Inspired by [ydotool](https://github.com/ReimuNotMoe/ydotool), it leverages nati
 
 `whydotool` requires a Wayland compositor that supports one or both of the following protocols depending on what you want to do:
 
-- [`wp_virtual_keyboard`](https://wayland.app/protocols/virtual-keyboard-unstable-v1#compositor-support) - required for keyboard-related commands (e.g. `key`, `type`, `stding`)
+- [`wp_virtual_keyboard`](https://wayland.app/protocols/virtual-keyboard-unstable-v1#compositor-support) - required for keyboard-related commands (e.g. `key`, `type`, `stdin`)
 - [`wlr_virtual_pointer`](https://wayland.app/protocols/wlr-virtual-pointer-unstable-v1#compositor-support) - required for pointer commands (e.g. `click`, `mousemove`)
 
 # Compatibility
