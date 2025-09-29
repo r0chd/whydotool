@@ -13,7 +13,8 @@
                 rust-analyzer-unwrapped
                 nixd
                 wayland
-                just
+                gcc
+                libxkbcommon
                 ;
             };
             LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath finalAttrs.buildInputs;
