@@ -1,6 +1,8 @@
 mod cli;
 mod virtual_keyboard;
 
+use std::time::Duration;
+
 use clap::Parser;
 use cli::Cli;
 use virtual_keyboard::VirtualKeyboard;
@@ -75,18 +77,22 @@ fn main() -> anyhow::Result<()> {
     match cli.cmd {
         Commands::Click {} => unimplemented!(),
         Commands::MouseMove {} => unimplemented!(),
-        Commands::Key { key } => match whydotool.virtual_keyboard.as_ref() {
-            Some(virtual_keyboard) => {
+        Commands::Key { key, key_delay } => match whydotool.virtual_keyboard.take() {
+            Some(mut virtual_keyboard) => {
                 for key_press in key {
                     virtual_keyboard.key(key_press.keycode, key_press.pressed);
+
+                    event_queue.roundtrip(&mut whydotool);
+
+                    if let Some(key_delay) = key_delay {
+                        std::thread::sleep(Duration::from_millis(key_delay));
+                    }
                 }
             }
             None => {}
         },
         Commands::Type {} => unimplemented!(),
     }
-
-    event_queue.blocking_dispatch(&mut whydotool)?;
 
     Ok(())
 }

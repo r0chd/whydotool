@@ -12,6 +12,7 @@ use xkbcommon::xkb::{self, KEYMAP_COMPILE_NO_FLAGS, KEYMAP_FORMAT_TEXT_V1};
 
 pub struct VirtualKeyboard {
     virtual_keyboard: zwp_virtual_keyboard_v1::ZwpVirtualKeyboardV1,
+    xkb_state: xkb::State,
 }
 
 impl VirtualKeyboard {
@@ -57,11 +58,33 @@ impl VirtualKeyboard {
             keymap.len() as u32,
         );
 
-        Ok(Self { virtual_keyboard })
+        Ok(Self {
+            xkb_state,
+            virtual_keyboard,
+        })
     }
 
-    pub fn key(&self, key: u32, state: u32) {
+    pub fn key(&mut self, key: u32, state: u32) {
+        let direction = if state == 1 {
+            xkb::KeyDirection::Down
+        } else {
+            xkb::KeyDirection::Up
+        };
+
+        // xkbcommon uses keycodes with an offset of 8
+        let xkb_keycode = key + 8;
+        self.xkb_state
+            .update_key(xkb::Keycode::new(xkb_keycode), direction);
+
         self.virtual_keyboard.key(0, key, state);
+
+        let depressed = self.xkb_state.serialize_mods(xkb::STATE_MODS_DEPRESSED);
+        let latched = self.xkb_state.serialize_mods(xkb::STATE_MODS_LATCHED);
+        let locked = self.xkb_state.serialize_mods(xkb::STATE_MODS_LOCKED);
+        let group = self.xkb_state.serialize_layout(xkb::STATE_LAYOUT_EFFECTIVE);
+
+        self.virtual_keyboard
+            .modifiers(depressed, latched, locked, group);
     }
 }
 
