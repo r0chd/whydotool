@@ -1,8 +1,8 @@
+mod cli;
 mod virtual_keyboard;
 
-use calloop::EventLoop;
-use calloop_wayland_source::WaylandSource;
 use clap::Parser;
+use cli::Cli;
 use virtual_keyboard::VirtualKeyboard;
 use wayland_client::{
     Connection, Dispatch, QueueHandle, delegate_dispatch, delegate_noop,
@@ -12,6 +12,8 @@ use wayland_client::{
 use wayland_protocols_wlr::virtual_pointer::v1::client::{
     zwlr_virtual_pointer_manager_v1, zwlr_virtual_pointer_v1,
 };
+
+use crate::cli::Commands;
 
 struct Whydotool {
     virtual_pointer: Option<zwlr_virtual_pointer_v1::ZwlrVirtualPointerV1>,
@@ -38,23 +40,6 @@ impl Whydotool {
             .map(|seat| VirtualKeyboard::try_new(globals, qh, seat).ok())
             .flatten();
 
-        if virtual_pointer.is_none() {
-            log::warn!(
-                "Failed to initialize virtual pointer: \
-         compositor does not support zwlr-virtual-pointer-v1"
-            );
-        }
-
-        if virtual_keyboard.is_none() {
-            log::warn!(
-                "Failed to initialize virtual keyboard: \
-         compositor does not support zwp-virtual-keyboard-v1"
-            );
-        }
-
-        virtual_keyboard.as_ref().unwrap().key(30, 1);
-        virtual_keyboard.as_ref().unwrap().key(30, 0);
-
         Self {
             virtual_pointer,
             virtual_keyboard,
@@ -78,23 +63,30 @@ delegate_dispatch!(Whydotool: [wl_registry::WlRegistry: GlobalListContents] => W
 delegate_noop!(Whydotool: zwlr_virtual_pointer_manager_v1::ZwlrVirtualPointerManagerV1);
 delegate_noop!(Whydotool: zwlr_virtual_pointer_v1::ZwlrVirtualPointerV1);
 
-#[derive(Parser, Debug)]
-#[command(name = "whydotool", about = "Wayland command-line automation tool")]
-pub struct Cli {}
-
 fn main() -> anyhow::Result<()> {
-    let cli = Cli::parse();
+    let cli = Cli::try_parse()?;
 
     let conn = Connection::connect_to_env()?;
-    let (globals, event_queue) = registry_queue_init(&conn)?;
+    let (globals, mut event_queue) = registry_queue_init(&conn)?;
     let qh = event_queue.handle();
 
-    let mut event_loop = EventLoop::try_new()?;
     let mut whydotool = Whydotool::new(&globals, &qh);
 
-    WaylandSource::new(conn, event_queue).insert(event_loop.handle())?;
+    match cli.cmd {
+        Commands::Click {} => unimplemented!(),
+        Commands::MouseMove {} => unimplemented!(),
+        Commands::Key { key } => match whydotool.virtual_keyboard.as_ref() {
+            Some(virtual_keyboard) => {
+                for key_press in key {
+                    virtual_keyboard.key(key_press.keycode, key_press.pressed);
+                }
+            }
+            None => {}
+        },
+        Commands::Type {} => unimplemented!(),
+    }
 
-    event_loop.run(None, &mut whydotool, |_| {})?;
+    event_queue.blocking_dispatch(&mut whydotool)?;
 
     Ok(())
 }
