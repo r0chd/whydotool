@@ -5,7 +5,7 @@
     { self, tooling, ... }:
     tooling.lib.mkMoxFlake {
       devShells = tooling.lib.forAllSystems (pkgs: {
-        default = pkgs.mkShell (
+        default = pkgs.mkShell.override { stdenv = pkgs.clangStdenv; } (
           pkgs.lib.fix (finalAttrs: {
             buildInputs = builtins.attrValues {
               inherit (pkgs)
@@ -13,8 +13,10 @@
                 rust-analyzer-unwrapped
                 nixd
                 wayland
-                gcc
                 libxkbcommon
+                pipewire
+                pkg-config
+                libclang
                 ;
             };
             LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath finalAttrs.buildInputs;

@@ -9,90 +9,19 @@ use clap::Parser;
 use cli::Cli;
 use std::time::Duration;
 use virtual_keyboard::VirtualKeyboard;
-use wayland_client::Proxy;
 use wayland_client::protocol::wl_pointer::ButtonState;
 use wayland_client::{
     Connection, Dispatch, QueueHandle, delegate_dispatch, delegate_noop,
     globals::{GlobalList, GlobalListContents, registry_queue_init},
-    protocol::{wl_output, wl_registry, wl_seat},
+    protocol::{wl_registry, wl_seat},
 };
 use wayland_protocols_wlr::virtual_pointer::v1::client::{
     zwlr_virtual_pointer_manager_v1, zwlr_virtual_pointer_v1,
 };
 
-#[derive(Debug)]
-pub struct Output {
-    name: Option<Box<str>>,
-    wl_output: wl_output::WlOutput,
-    x: i32,
-    y: i32,
-    width: i32,
-    height: i32,
-}
-
-impl Output {
-    fn new(wl_output: wl_output::WlOutput) -> Self {
-        Self {
-            name: None,
-            wl_output,
-            x: 0,
-            y: 0,
-            width: 0,
-            height: 0,
-        }
-    }
-}
-
-impl Dispatch<wl_output::WlOutput, ()> for Whydotool {
-    fn event(
-        state: &mut Self,
-        wl_output: &wl_output::WlOutput,
-        event: <wl_output::WlOutput as wayland_client::Proxy>::Event,
-        _: &(),
-        _: &Connection,
-        _: &QueueHandle<Self>,
-    ) {
-        let Some(output) = state
-            .outputs
-            .iter_mut()
-            .find(|output| output.wl_output == *wl_output)
-        else {
-            return;
-        };
-
-        match event {
-            wl_output::Event::Name { name } => output.name = Some(name.into()),
-            wl_output::Event::Geometry {
-                x,
-                y,
-                physical_width: _,
-                physical_height: _,
-                subpixel: _,
-                make: _,
-                model: _,
-                transform: _,
-            } => {
-                output.x = x;
-                output.y = y;
-            }
-            wl_output::Event::Mode {
-                flags: _,
-                width,
-                height,
-                refresh: _,
-            } => {
-                output.width = width;
-                output.height = height;
-            }
-            _ => {}
-        }
-    }
-}
-
 struct Whydotool {
     virtual_pointer: Option<VirtualPointer>,
     virtual_keyboard: Option<VirtualKeyboard>,
-    outputs: Vec<Output>,
 }
 
 impl Whydotool {
@@ -105,19 +34,6 @@ impl Whydotool {
             .as_ref()
             .map(|seat| VirtualKeyboard::from_wayland(globals, qh, seat).ok())
             .flatten();
-
-        let mut outputs = Vec::new();
-        globals.contents().with_list(|list| {
-            list.iter()
-                .filter(|global| global.interface == wl_output::WlOutput::interface().name)
-                .for_each(|global| {
-                    let wl_output = globals
-                        .registry()
-                        .bind(global.name, global.version, &qh, ());
-                    let output = Output::new(wl_output);
-                    outputs.push(output);
-                });
-        });
 
         if virtual_pointer.is_none() || virtual_keyboard.is_none() {
             let remote_desktop = remote_desktop::RemoteDesktop::try_new()?;
@@ -133,12 +49,13 @@ impl Whydotool {
                 virtual_pointer = Some(VirtualPointer::from_portal(
                     remote_desktop.proxy,
                     remote_desktop.session_handle,
-                ))
+                    globals,
+                    qh,
+                )?)
             }
         }
 
         Ok(Self {
-            outputs,
             virtual_pointer,
             virtual_keyboard,
         })
@@ -196,14 +113,7 @@ fn main() -> anyhow::Result<()> {
                 virtual_pointer.scroll(xpos as f64, ypos as f64);
             } else {
                 if absolute {
-                    let (x_extent, y_extent) =
-                        whydotool.outputs.iter().fold((0, 0), |(w, h), output| {
-                            let output_right = output.x + output.width;
-                            let output_bottom = output.y + output.height;
-                            (w.max(output_right), h.max(output_bottom))
-                        });
-
-                    virtual_pointer.motion_absolute(xpos, ypos, x_extent as u32, y_extent as u32);
+                    virtual_pointer.motion_absolute(xpos, ypos);
                 } else {
                     virtual_pointer.motion(xpos as f64, ypos as f64);
                 }
@@ -229,7 +139,7 @@ fn main() -> anyhow::Result<()> {
                 }
             }
         }
-        Commands::Type {} => unimplemented!(),
+        Commands::Type { .. } => {}
     }
 
     Ok(())

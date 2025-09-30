@@ -35,7 +35,30 @@ pub enum Commands {
         #[arg(short = 'y', long = "ypos")]
         ypos: u32,
     },
-    Type {},
+    Type {
+        /// Delay N ms between key down/up
+        #[arg(short = 'd', long = "key-delay", default_value_t = 20)]
+        key_delay: u64,
+
+        /// Hold each key for N ms
+        #[arg(short = 'H', long = "key-hold", default_value_t = 20)]
+        key_hold: u64,
+
+        /// Delay N ms between command line strings
+        #[arg(short = 'D', long = "next-delay", default_value_t = 0)]
+        next_delay: u64,
+
+        /// Input file (or "-" for stdin)
+        #[arg(short = 'f', long = "file")]
+        file: Option<String>,
+
+        /// Escape enable (1) or disable (0)
+        #[arg(short = 'e', long = "escape")]
+        escape: Option<u8>,
+
+        /// Strings to type
+        strings: Vec<String>,
+    },
     Key {
         #[arg(value_delimiter = ' ', num_args = 1.., value_parser = parse_keypress)]
         key_presses: Vec<KeyPress>,
