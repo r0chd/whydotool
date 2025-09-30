@@ -16,7 +16,7 @@ Inspired by [ydotool](https://github.com/ReimuNotMoe/ydotool), it leverages nati
 - `wlr_virtual_pointer` protocol ([compositor support](https://wayland.app/protocols/wlr-virtual-pointer-unstable-v1#compositor-support))
 
 **Universal alternative:**
-- `xdg-desktop-portal` with RemoteDesktop interface ([compositor support](https://wiki.archlinux.org/title/XDG_Desktop_Portal)) - supported by all major desktop compositors (GNOME, KDE Plasma, etc.)
+- `xdg-desktop-portal` with RemoteDesktop interface ([compositor support](https://wiki.archlinux.org/title/XDG_Desktop_Portal#List_of_backends_and_interfaces)) - supported by all major desktop compositors (GNOME, KDE Plasma, etc.)
 
 If your compositor doesn't support the specific protocols above, it will likely work through the portal interface. Check the linked compatibility tables to verify support for your compositor.
 
@@ -34,7 +34,7 @@ whydotool aims to be fully compatible with ydotool. Currently supported commands
 
 | Feature | whydotool | ydotool |
 |---------|-----------|---------|
-| **Compatibility** | Wayland only, depends on specific protocols | Runs everywhere |
+| **Compatibility** | Wayland only | Runs everywhere |
 | **Architecture** | Fully Userspace | Kernelspace |
 | **Security Model** | Uses compositor-granted Wayland protocols or xdg-desktop-portal | Writes directly to uinput |
 | **Privileges** | Does not require root | Requires root privileges |
