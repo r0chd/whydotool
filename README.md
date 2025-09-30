@@ -1,19 +1,28 @@
 # whydotool
-
 A Wayland-native command-line automation tool.
 
 Inspired by [ydotool](https://github.com/ReimuNotMoe/ydotool), it leverages native Wayland protocols to simulate input without requiring low-level kernel access.
 
-# Dependencies
+## Requirements
 
-`whydotool` requires a Wayland compositor that supports one or both of the following protocols depending on what you want to do:
+`whydotool` works with most major Wayland compositors through either direct protocol support or the `xdg-desktop-portal` RemoteDesktop interface.
 
-- [`wp_virtual_keyboard`](https://wayland.app/protocols/virtual-keyboard-unstable-v1#compositor-support) - required for keyboard-related commands (e.g. `key`, `type`, `stdin`)
-- [`wlr_virtual_pointer`](https://wayland.app/protocols/wlr-virtual-pointer-unstable-v1#compositor-support) - required for pointer commands (e.g. `click`, `mousemove`)
+### Protocol Support
 
-# Compatibility
+**For keyboard commands** (`key`, `type`, `stdin`):
+- `wp_virtual_keyboard` protocol ([compositor support](https://wayland.app/protocols/virtual-keyboard-unstable-v1#compositor-support))
 
-whydotool tries to be fully compatible with ydotool, list of supported ydotool commands:
+**For pointer commands** (`click`, `mousemove`):
+- `wlr_virtual_pointer` protocol ([compositor support](https://wayland.app/protocols/wlr-virtual-pointer-unstable-v1#compositor-support))
+
+**Universal alternative:**
+- `xdg-desktop-portal` with RemoteDesktop interface ([compositor support](https://wiki.archlinux.org/title/XDG_Desktop_Portal)) - supported by all major desktop compositors (GNOME, KDE Plasma, etc.)
+
+If your compositor doesn't support the specific protocols above, it will likely work through the portal interface. Check the linked compatibility tables to verify support for your compositor.
+
+## Compatibility
+
+whydotool aims to be fully compatible with ydotool. Currently supported commands:
 
 - [ ] click - Click on mouse buttons
 - [x] mousemove - Move mouse pointer to absolute position
@@ -21,13 +30,13 @@ whydotool tries to be fully compatible with ydotool, list of supported ydotool c
 - [x] key - Press keys
 - [ ] stdin - Sends the key presses as it was a keyboard (i.e from ssh)
 
-# whydotool vs. ydotool
+## whydotool vs. ydotool
 
 | Feature | whydotool | ydotool |
 |---------|-----------|---------|
 | **Compatibility** | Wayland only, depends on specific protocols | Runs everywhere |
 | **Architecture** | Fully Userspace | Kernelspace |
-| **Security Model** | Uses compositor-granted Wayland protocols | Writes directly to uinput |
+| **Security Model** | Uses compositor-granted Wayland protocols or xdg-desktop-portal | Writes directly to uinput |
 | **Privileges** | Does not require root | Requires root privileges |
 | **Daemon** | Daemonless | Requires a running daemon |
 | **Speed** | Slower | Faster (direct kernel-level input injection) |

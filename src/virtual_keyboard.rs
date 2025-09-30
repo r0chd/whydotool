@@ -1,5 +1,5 @@
-use crate::Whydotool;
-use std::{ffi::CString, io::Write, os::fd::AsFd, path::PathBuf};
+use crate::{Whydotool, remote_desktop::RemoteDesktopProxyBlocking};
+use std::{collections::HashMap, ffi::CString, fs, io::Write, os::fd::AsFd, path::PathBuf};
 use wayland_client::{
     QueueHandle, delegate_noop,
     globals::GlobalList,
@@ -9,26 +9,23 @@ use wayland_protocols_misc::zwp_virtual_keyboard_v1::client::{
     zwp_virtual_keyboard_manager_v1, zwp_virtual_keyboard_v1,
 };
 use xkbcommon::xkb::{self, KEYMAP_COMPILE_NO_FLAGS, KEYMAP_FORMAT_TEXT_V1};
+use zbus::zvariant::OwnedObjectPath;
+
+pub enum VirtualKeyboardInner {
+    Wayland(zwp_virtual_keyboard_v1::ZwpVirtualKeyboardV1),
+    Portal {
+        proxy: RemoteDesktopProxyBlocking<'static>,
+        session_handle: OwnedObjectPath,
+    },
+}
 
 pub struct VirtualKeyboard {
-    virtual_keyboard: zwp_virtual_keyboard_v1::ZwpVirtualKeyboardV1,
+    inner: VirtualKeyboardInner,
     xkb_state: xkb::State,
 }
 
 impl VirtualKeyboard {
-    pub fn try_new(
-        globals: &GlobalList,
-        qh: &QueueHandle<Whydotool>,
-        seat: &wl_seat::WlSeat,
-    ) -> anyhow::Result<Self> {
-        let virtual_keyboard = globals
-            .bind::<zwp_virtual_keyboard_manager_v1::ZwpVirtualKeyboardManagerV1, _, _>(
-                &qh,
-                1..=1,
-                (),
-            )
-            .map(|virtual_keyboard| virtual_keyboard.create_virtual_keyboard(seat, qh, ()))?;
-
+    fn xkb() -> (xkb::State, fs::File, u32) {
         let xkb_context = xkb::Context::new(xkb::CONTEXT_NO_FLAGS);
         let xkb_keymap = xkb::Keymap::new_from_names(
             &xkb_context,
@@ -52,16 +49,45 @@ impl VirtualKeyboard {
         file.write_all(keymap).unwrap();
         file.flush().unwrap();
 
-        virtual_keyboard.keymap(
-            wl_keyboard::KeymapFormat::XkbV1.into(),
-            file.as_fd(),
-            keymap.len() as u32,
-        );
+        (xkb_state, file, keymap.len() as u32)
+    }
+
+    pub fn from_wayland(
+        globals: &GlobalList,
+        qh: &QueueHandle<Whydotool>,
+        seat: &wl_seat::WlSeat,
+    ) -> anyhow::Result<Self> {
+        let virtual_keyboard = globals
+            .bind::<zwp_virtual_keyboard_manager_v1::ZwpVirtualKeyboardManagerV1, _, _>(
+                &qh,
+                1..=1,
+                (),
+            )
+            .map(|virtual_keyboard| virtual_keyboard.create_virtual_keyboard(seat, qh, ()))?;
+
+        let (xkb_state, file, size) = Self::xkb();
+
+        virtual_keyboard.keymap(wl_keyboard::KeymapFormat::XkbV1.into(), file.as_fd(), size);
 
         Ok(Self {
             xkb_state,
-            virtual_keyboard,
+            inner: VirtualKeyboardInner::Wayland(virtual_keyboard),
         })
+    }
+
+    pub fn from_portal(
+        proxy: RemoteDesktopProxyBlocking<'static>,
+        session_handle: OwnedObjectPath,
+    ) -> Self {
+        let (xkb_state, _, _) = Self::xkb();
+
+        Self {
+            inner: VirtualKeyboardInner::Portal {
+                proxy,
+                session_handle,
+            },
+            xkb_state,
+        }
     }
 
     pub fn key(&mut self, key: u32, state: u32) {
@@ -72,19 +98,35 @@ impl VirtualKeyboard {
         };
 
         // xkbcommon uses keycodes with an offset of 8
-        let xkb_keycode = key + 8;
-        self.xkb_state
-            .update_key(xkb::Keycode::new(xkb_keycode), direction);
+        let keycode = key + 8;
+        let xkb_keycode = xkb::Keycode::new(keycode);
+        self.xkb_state.update_key(xkb_keycode, direction);
 
-        self.virtual_keyboard.key(0, key, state);
+        match self.inner {
+            VirtualKeyboardInner::Wayland(ref virtual_keyboard) => {
+                let depressed = self.xkb_state.serialize_mods(xkb::STATE_MODS_DEPRESSED);
+                let latched = self.xkb_state.serialize_mods(xkb::STATE_MODS_LATCHED);
+                let locked = self.xkb_state.serialize_mods(xkb::STATE_MODS_LOCKED);
+                let group = self.xkb_state.serialize_layout(xkb::STATE_LAYOUT_EFFECTIVE);
 
-        let depressed = self.xkb_state.serialize_mods(xkb::STATE_MODS_DEPRESSED);
-        let latched = self.xkb_state.serialize_mods(xkb::STATE_MODS_LATCHED);
-        let locked = self.xkb_state.serialize_mods(xkb::STATE_MODS_LOCKED);
-        let group = self.xkb_state.serialize_layout(xkb::STATE_LAYOUT_EFFECTIVE);
-
-        self.virtual_keyboard
-            .modifiers(depressed, latched, locked, group);
+                virtual_keyboard.key(0, key, state);
+                virtual_keyboard.modifiers(depressed, latched, locked, group);
+            }
+            VirtualKeyboardInner::Portal {
+                ref proxy,
+                ref session_handle,
+            } => {
+                let keysym = self.xkb_state.key_get_one_sym(xkb_keycode);
+                proxy
+                    .notify_keyboard_keysym(
+                        session_handle.clone(),
+                        HashMap::new(),
+                        keysym.raw() as i32,
+                        state,
+                    )
+                    .unwrap()
+            }
+        }
     }
 }
 
