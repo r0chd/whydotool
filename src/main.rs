@@ -1,4 +1,5 @@
 mod cli;
+mod remote_desktop;
 mod virtual_keyboard;
 
 use crate::cli::Commands;
