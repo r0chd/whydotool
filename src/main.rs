@@ -164,7 +164,7 @@ fn main() -> anyhow::Result<()> {
     match cli.cmd {
         Commands::Click {} => {
             let virtual_pointer = whydotool.virtual_pointer.take().ok_or_else(|| {
-                anyhow::anyhow!("Virtual keyboard protocol is not supported by the compositor")
+                anyhow::anyhow!("Virtual pointer protocol is not supported by the compositor")
             })?;
 
             virtual_pointer.button(0, 0, ButtonState::Pressed);
@@ -177,7 +177,7 @@ fn main() -> anyhow::Result<()> {
             ypos,
         } => {
             let virtual_pointer = whydotool.virtual_pointer.take().ok_or_else(|| {
-                anyhow::anyhow!("Virtual keyboard protocol is not supported by the compositor")
+                anyhow::anyhow!("Virtual pointer protocol is not supported by the compositor")
             })?;
 
             let (x_extent, y_extent) = whydotool.outputs.iter().fold((0, 0), |(w, h), output| {
