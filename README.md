@@ -25,7 +25,7 @@ If your compositor doesn't support the specific protocols above, it will likely 
 whydotool aims to be fully compatible with ydotool. Currently supported commands:
 
 - [ ] click - Click on mouse buttons
-- [x] mousemove - Move mouse pointer to absolute position
+- [x] mousemove - Move mouse pointer to relative or absolute position
 - [ ] type - Type a string
 - [x] key - Press keys
 - [ ] stdin - Sends the key presses as it was a keyboard (i.e from ssh)

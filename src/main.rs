@@ -1,14 +1,13 @@
 mod cli;
-mod remote_desktop;
-mod virtual_keyboard;
-mod virtual_pointer;
+mod portal;
+mod virtual_device;
 
 use crate::cli::Commands;
-use crate::virtual_pointer::VirtualPointer;
 use clap::Parser;
 use cli::Cli;
+use portal::remote_desktop;
 use std::time::Duration;
-use virtual_keyboard::VirtualKeyboard;
+use virtual_device::{keyboard::VirtualKeyboard, pointer::VirtualPointer};
 use wayland_client::protocol::wl_pointer::ButtonState;
 use wayland_client::{
     Connection, Dispatch, QueueHandle, delegate_dispatch, delegate_noop,

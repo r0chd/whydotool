@@ -1,4 +1,4 @@
-use crate::{Whydotool, remote_desktop::RemoteDesktopProxyBlocking};
+use crate::{Whydotool, portal::remote_desktop::RemoteDesktopProxyBlocking};
 use std::{collections::HashMap, ffi::CString, fs, io::Write, os::fd::AsFd, path::PathBuf};
 use wayland_client::{
     QueueHandle, delegate_noop,
@@ -119,7 +119,7 @@ impl VirtualKeyboard {
                 let keysym = self.xkb_state.key_get_one_sym(xkb_keycode);
                 proxy
                     .notify_keyboard_keysym(
-                        session_handle.clone(),
+                        session_handle,
                         HashMap::new(),
                         keysym.raw() as i32,
                         state,

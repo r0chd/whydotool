@@ -1,6 +1,4 @@
-use crate::{Whydotool, remote_desktop::RemoteDesktopProxyBlocking};
-use pipewire::properties::properties;
-use pipewire::{self as pw, thread_loop::ThreadLoop};
+use crate::{Whydotool, portal::remote_desktop::RemoteDesktopProxyBlocking};
 use std::collections::HashMap;
 use wayland_client::{
     Connection, Dispatch, Proxy, QueueHandle,
@@ -74,8 +72,6 @@ impl Dispatch<wl_output::WlOutput, ()> for Whydotool {
 pub enum VirtualPointerInner {
     Wayland(zwlr_virtual_pointer_v1::ZwlrVirtualPointerV1),
     Portal {
-        thread_loop: ThreadLoop,
-        stream: pw::stream::Stream,
         proxy: RemoteDesktopProxyBlocking<'static>,
         session_handle: OwnedObjectPath,
     },
@@ -127,22 +123,6 @@ impl VirtualPointer {
         globals: &GlobalList,
         qh: &QueueHandle<Whydotool>,
     ) -> anyhow::Result<Self> {
-        let thread_loop = unsafe { pw::thread_loop::ThreadLoop::new(Some("whydotool"), None)? };
-        let context = pw::context::Context::new(&thread_loop)?;
-        let core = context.connect(None)?;
-
-        let stream = pw::stream::Stream::new(
-            &core,
-            "whydotool",
-            properties! {
-                *pw::keys::MEDIA_TYPE => "Video",
-                *pw::keys::MEDIA_CATEGORY => "Capture",
-                *pw::keys::MEDIA_ROLE => "RemoteDesktop",
-                *pw::keys::VIDEO_SIZE => "640x480",
-                *pw::keys::VIDEO_FORMAT => "RGB",
-            },
-        )?;
-
         let mut outputs = Vec::new();
         globals.contents().with_list(|list| {
             list.iter()
@@ -159,10 +139,8 @@ impl VirtualPointer {
         Ok(Self {
             outputs,
             inner: VirtualPointerInner::Portal {
-                thread_loop,
-                stream,
-                proxy,
                 session_handle,
+                proxy,
             },
         })
     }
@@ -179,7 +157,7 @@ impl VirtualPointer {
                 ..
             } => proxy
                 .notify_pointer_button(
-                    session_handle.to_owned(),
+                    session_handle,
                     HashMap::new(),
                     button as i32,
                     if state == wl_pointer::ButtonState::Released {
@@ -204,12 +182,7 @@ impl VirtualPointer {
                 ref session_handle,
                 ..
             } => proxy
-                .notify_pointer_axis(
-                    session_handle.to_owned(),
-                    HashMap::new(),
-                    xpos as f32,
-                    ypos as f32,
-                )
+                .notify_pointer_axis(session_handle, HashMap::new(), xpos as f32, ypos as f32)
                 .unwrap(),
         }
     }
@@ -225,42 +198,40 @@ impl VirtualPointer {
                 ref session_handle,
                 ..
             } => proxy
-                .notify_pointer_motion(
-                    session_handle.to_owned(),
-                    HashMap::new(),
-                    xpos as f32,
-                    ypos as f32,
-                )
+                .notify_pointer_motion(session_handle, HashMap::new(), xpos as f32, ypos as f32)
                 .unwrap(),
         }
     }
 
     pub fn motion_absolute(&self, xpos: u32, ypos: u32) {
+        let (width, height) = self.outputs.iter().fold((0, 0), |(w, h), output| {
+            let output_right = output.x + output.width;
+            let output_bottom = output.y + output.height;
+            (w.max(output_right), h.max(output_bottom))
+        });
+
         match self.inner {
             VirtualPointerInner::Wayland(ref virtual_pointer) => {
-                let (x_extent, y_extent) = self.outputs.iter().fold((0, 0), |(w, h), output| {
-                    let output_right = output.x + output.width;
-                    let output_bottom = output.y + output.height;
-                    (w.max(output_right), h.max(output_bottom))
-                });
-
-                virtual_pointer.motion_absolute(0, xpos, ypos, x_extent as u32, y_extent as u32);
+                virtual_pointer.motion_absolute(0, xpos, ypos, width as u32, height as u32);
                 virtual_pointer.frame();
             }
             VirtualPointerInner::Portal {
                 ref proxy,
                 ref session_handle,
-                ref stream,
                 ..
-            } => proxy
-                .notify_pointer_motion_absolute(
-                    session_handle.to_owned(),
-                    HashMap::new(),
-                    stream.node_id(),
-                    xpos as f32,
-                    ypos as f32,
-                )
-                .unwrap(),
+            } => {
+                //let screencast = screencast::ScreenCast::try_new(session_handle).unwrap();
+
+                proxy
+                    .notify_pointer_motion_absolute(
+                        session_handle,
+                        HashMap::new(),
+                        0,
+                        xpos as f32,
+                        ypos as f32,
+                    )
+                    .unwrap()
+            }
         }
     }
 }

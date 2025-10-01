@@ -1,4 +1,4 @@
-use rand::{Rng, distr::Alphanumeric};
+use super::{request, util};
 use std::collections::HashMap;
 
 pub struct RemoteDesktop {
@@ -16,40 +16,14 @@ impl RemoteDesktop {
         let keyboard_supported = (device_types & 1) != 0;
         let pointer_supported = (device_types & 2) != 0;
 
-        let token: String = rand::rng()
-            .sample_iter(&Alphanumeric)
-            .take(10)
-            .map(char::from)
-            .collect();
-        let session_token = format!("whydotool_{token}");
+        let session_token = util::SessionToken::new();
 
-        let session_path = {
-            let session_options = [("session_handle_token", session_token.clone().into())];
-            remote_desktop_proxy
-                .create_session(session_options.into())
-                .unwrap()
-        };
-
-        let request_proxy = RequestProxyBlocking::builder(&conn)
-            .path(&session_path)?
-            .build()?;
-
-        let mut stream = request_proxy.receive_response()?;
-
-        let session_handle = request_proxy
-            .receive_response()?
-            .next()
-            .unwrap()
-            .args()
-            .ok()
-            .and_then(|response| response.results.get("session_handle").cloned())
-            .and_then(|value| {
-                let zbus::zvariant::Value::Str(s) = value else {
-                    unreachable!()
-                };
-                zbus::zvariant::OwnedObjectPath::try_from(s.as_str()).ok()
-            })
+        let session_path = remote_desktop_proxy
+            .create_session([("session_handle_token", session_token.into())].into())
             .unwrap();
+
+        let mut request = request::Request::try_new(&conn, &session_path)?;
+        let session_handle = request.get_session_handle();
 
         let selected_device_mask = if keyboard_supported && pointer_supported {
             1 | 2
@@ -61,19 +35,21 @@ impl RemoteDesktop {
             0
         };
 
-        stream.next().unwrap().args()?;
+        remote_desktop_proxy.select_devices(
+            &session_handle,
+            [("devices", selected_device_mask.into())].into(),
+        )?;
 
-        let devices_options = [("devices", selected_device_mask.into())];
-        remote_desktop_proxy.select_devices(session_handle.clone(), devices_options.into())?;
+        request.next_response().unwrap().args()?;
 
-        stream.next().unwrap().args()?;
+        remote_desktop_proxy.start(
+            &session_handle,
+            "",
+            [("devices", selected_device_mask.into())].into(),
+        )?;
 
-        let start_options = [("devices", selected_device_mask.into())];
-        remote_desktop_proxy.start(session_handle.clone(), "", start_options.into())?;
-
-        let res = stream.next().unwrap().args()?.response;
-
-        if res == 0 {
+        let res = request.next_response().unwrap();
+        if res.args()?.response == 0 {
             Ok(Self {
                 session_handle,
                 proxy: remote_desktop_proxy,
@@ -100,20 +76,20 @@ pub trait RemoteDesktop {
 
     fn select_devices(
         &self,
-        session_handle: zbus::zvariant::OwnedObjectPath,
+        session_handle: &zbus::zvariant::OwnedObjectPath,
         options: HashMap<&str, zbus::zvariant::Value<'_>>,
     ) -> zbus::Result<zbus::zvariant::OwnedObjectPath>;
 
     fn start(
         &self,
-        session_handle: zbus::zvariant::OwnedObjectPath,
+        session_handle: &zbus::zvariant::OwnedObjectPath,
         parent_window: &str,
         options: HashMap<&str, zbus::zvariant::Value<'_>>,
     ) -> zbus::Result<zbus::zvariant::OwnedObjectPath>;
 
     fn notify_pointer_motion(
         &self,
-        session_handle: zbus::zvariant::OwnedObjectPath,
+        session_handle: &zbus::zvariant::OwnedObjectPath,
         options: HashMap<&str, zbus::zvariant::Value<'_>>,
         dx: f32,
         dy: f32,
@@ -121,7 +97,7 @@ pub trait RemoteDesktop {
 
     fn notify_pointer_motion_absolute(
         &self,
-        session_handle: zbus::zvariant::OwnedObjectPath,
+        session_handle: &zbus::zvariant::OwnedObjectPath,
         options: HashMap<&str, zbus::zvariant::Value<'_>>,
         stream: u32,
         dx: f32,
@@ -130,7 +106,7 @@ pub trait RemoteDesktop {
 
     fn notify_pointer_button(
         &self,
-        session_handle: zbus::zvariant::OwnedObjectPath,
+        session_handle: &zbus::zvariant::OwnedObjectPath,
         options: HashMap<&str, zbus::zvariant::Value<'_>>,
         button: i32,
         state: u32,
@@ -138,7 +114,7 @@ pub trait RemoteDesktop {
 
     fn notify_pointer_axis(
         &self,
-        session_handle: zbus::zvariant::OwnedObjectPath,
+        session_handle: &zbus::zvariant::OwnedObjectPath,
         options: HashMap<&str, zbus::zvariant::Value<'_>>,
         dx: f32,
         dy: f32,
@@ -146,22 +122,9 @@ pub trait RemoteDesktop {
 
     fn notify_keyboard_keysym(
         &self,
-        session_handle: zbus::zvariant::OwnedObjectPath,
+        session_handle: &zbus::zvariant::OwnedObjectPath,
         options: HashMap<&str, zbus::zvariant::Value<'_>>,
         keycode: i32,
         state: u32,
     ) -> zbus::Result<()>;
-}
-
-#[zbus::proxy(
-    interface = "org.freedesktop.portal.Request",
-    default_service = "org.freedesktop.portal.Desktop"
-)]
-trait Request {
-    #[zbus(signal)]
-    fn response(
-        &self,
-        response: u32,
-        results: HashMap<&str, zbus::zvariant::Value<'_>>,
-    ) -> Result<u32>;
 }
