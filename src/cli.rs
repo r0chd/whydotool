@@ -12,11 +12,32 @@ pub struct KeyPress {
 pub struct Cli {
     #[command(subcommand)]
     pub cmd: Commands,
+
+    /// Force input injection via xdg-desktop-portal even if native Wayland virtual devices are available.
+    #[arg(
+        short = 'f',
+        long,
+        env = "WHYDOTOOL_FORCE_PORTAL",
+        default_value_t = false
+    )]
+    pub force_portal: bool,
 }
 
 #[derive(Parser, Debug)]
 pub enum Commands {
-    Click {},
+    Click {
+        /// Buttons to click (hex values like 0xC0 for left click)
+        #[arg(num_args = 1..)]
+        buttons: Vec<String>,
+
+        /// Repeat the sequence N times
+        #[arg(short = 'r', long = "repeat", default_value_t = 1)]
+        repeat: u32,
+
+        /// Delay between input events in ms
+        #[arg(short = 'D', long = "next-delay")]
+        next_delay: Option<u64>,
+    },
     Mousemove {
         /// Move mouse wheel relatively
         #[arg(short = 'w', long = "wheel")]
@@ -28,12 +49,12 @@ pub enum Commands {
         absolute: bool,
 
         /// X position
-        #[arg(short = 'x', long = "xpos")]
-        xpos: u32,
+        #[arg(short = 'x', long = "xpos", allow_hyphen_values = true)]
+        xpos: f64,
 
         /// Y position
-        #[arg(short = 'y', long = "ypos")]
-        ypos: u32,
+        #[arg(short = 'y', long = "ypos", allow_hyphen_values = true)]
+        ypos: f64,
     },
     Type {
         /// Delay N ms between key down/up

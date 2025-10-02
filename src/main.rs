@@ -25,15 +25,22 @@ struct Whydotool {
 }
 
 impl Whydotool {
-    fn try_new(globals: &GlobalList, qh: &QueueHandle<Self>) -> anyhow::Result<Self> {
+    fn try_new(cli: &Cli, globals: &GlobalList, qh: &QueueHandle<Self>) -> anyhow::Result<Self> {
         let seat = globals.bind::<wl_seat::WlSeat, _, _>(qh, 1..=4, ()).ok();
 
-        let mut virtual_pointer = VirtualPointer::from_wayland(globals, qh, seat.as_ref()).ok();
+        let mut virtual_pointer = if cli.force_portal {
+            None
+        } else {
+            VirtualPointer::from_wayland(globals, qh, seat.as_ref()).ok()
+        };
 
-        let mut virtual_keyboard = seat
-            .as_ref()
-            .map(|seat| VirtualKeyboard::from_wayland(globals, qh, seat).ok())
-            .flatten();
+        let mut virtual_keyboard = if cli.force_portal {
+            None
+        } else {
+            seat.as_ref()
+                .map(|seat| VirtualKeyboard::from_wayland(globals, qh, seat).ok())
+                .flatten()
+        };
 
         if virtual_pointer.is_none() || virtual_keyboard.is_none() {
             let remote_desktop = remote_desktop::RemoteDesktop::try_new()?;
@@ -85,20 +92,13 @@ fn main() -> anyhow::Result<()> {
     let (globals, mut event_queue) = registry_queue_init(&conn)?;
     let qh = event_queue.handle();
 
-    let mut whydotool = Whydotool::try_new(&globals, &qh)?;
+    let mut whydotool = Whydotool::try_new(&cli, &globals, &qh)?;
 
     event_queue.dispatch_pending(&mut whydotool)?;
     event_queue.roundtrip(&mut whydotool)?;
 
     match cli.cmd {
-        Commands::Click {} => {
-            let virtual_pointer = whydotool.virtual_pointer.take().ok_or_else(|| {
-                anyhow::anyhow!("Virtual pointer unavailable: both compositor protocol support AND desktop portal remote desktop support are missing")
-            })?;
-
-            virtual_pointer.button(0, ButtonState::Pressed);
-            virtual_pointer.button(0, ButtonState::Released);
-        }
+        Commands::Click { .. } => {}
         Commands::Mousemove {
             wheel,
             absolute,
@@ -110,12 +110,12 @@ fn main() -> anyhow::Result<()> {
             })?;
 
             if wheel {
-                virtual_pointer.scroll(xpos as f64, ypos as f64);
+                virtual_pointer.scroll(xpos, ypos);
             } else {
                 if absolute {
-                    virtual_pointer.motion_absolute(xpos, ypos);
+                    virtual_pointer.motion_absolute(xpos as u32, ypos as u32);
                 } else {
-                    virtual_pointer.motion(xpos as f64, ypos as f64);
+                    virtual_pointer.motion(xpos, ypos);
                 }
             }
 
