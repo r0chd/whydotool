@@ -3,7 +3,7 @@ pub mod traits;
 mod util;
 mod wayland;
 
-use crate::Whydotool;
+use crate::{Whydotool, portal::remote_desktop};
 use wayland_client::{QueueHandle, globals::GlobalList, protocol::wl_seat};
 
 pub fn virtual_pointer(
@@ -16,10 +16,14 @@ pub fn virtual_pointer(
         return Ok(Box::new(ptr));
     }
 
-    let remote_desktop = crate::portal::remote_desktop::RemoteDesktop::try_new()?;
+    let remote_desktop = remote_desktop::RemoteDesktop::builder()
+        .pointer(true)
+        .screencast(true)
+        .try_build()?;
     let portal_ptr = portal::PortalPointer::new(
         remote_desktop.proxy,
         remote_desktop.session_handle,
+        remote_desktop.screencast.unwrap(),
         globals,
         qh,
     );

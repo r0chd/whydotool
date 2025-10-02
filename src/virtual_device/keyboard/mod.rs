@@ -3,7 +3,7 @@ pub mod traits;
 mod util;
 mod wayland;
 
-use crate::Whydotool;
+use crate::{Whydotool, portal::remote_desktop};
 use wayland_client::{QueueHandle, delegate_noop, globals::GlobalList, protocol::wl_seat};
 use wayland_protocols_misc::zwp_virtual_keyboard_v1::client::{
     zwp_virtual_keyboard_manager_v1, zwp_virtual_keyboard_v1,
@@ -22,7 +22,9 @@ pub fn virtual_keyboard(
         return Ok(Box::new(ptr));
     }
 
-    let remote_desktop = crate::portal::remote_desktop::RemoteDesktop::try_new()?;
+    let remote_desktop = remote_desktop::RemoteDesktop::builder()
+        .keyboard(true)
+        .try_build()?;
     Ok(Box::new(portal::PortalKeyboard::new(
         remote_desktop.proxy,
         remote_desktop.session_handle,
