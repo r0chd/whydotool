@@ -3,12 +3,13 @@ mod portal;
 mod virtual_device;
 
 use crate::cli::Commands;
+use crate::virtual_device::pointer;
 use clap::Parser;
 use cli::Cli;
 use portal::remote_desktop;
 use std::time::Duration;
 use std::{fs, io};
-use virtual_device::{keyboard::VirtualKeyboard, pointer::VirtualPointer};
+use virtual_device::{keyboard::VirtualKeyboard, pointer::traits::VirtualPointer};
 use wayland_client::protocol::wl_pointer::ButtonState;
 use wayland_client::{
     Connection, Dispatch, QueueHandle, delegate_dispatch, delegate_noop,
@@ -20,7 +21,7 @@ use wayland_protocols_wlr::virtual_pointer::v1::client::{
 };
 
 struct Whydotool {
-    virtual_pointer: Option<VirtualPointer>,
+    virtual_pointer: Option<Box<dyn VirtualPointer>>,
     virtual_keyboard: Option<VirtualKeyboard>,
 }
 
@@ -28,23 +29,12 @@ impl Whydotool {
     fn try_new(cli: &Cli, globals: &GlobalList, qh: &QueueHandle<Self>) -> anyhow::Result<Self> {
         let seat = globals.bind::<wl_seat::WlSeat, _, _>(qh, 1..=4, ()).ok();
 
-        let mut virtual_pointer = None;
-        let mut virtual_keyboard = None;
+        let mut virtual_pointer: Option<Box<dyn VirtualPointer>> = None;
+        let mut virtual_keyboard: Option<VirtualKeyboard> = None;
 
         if matches!(cli.cmd, Commands::Click { .. } | Commands::Mousemove { .. }) {
-            if !cli.force_portal {
-                virtual_pointer = VirtualPointer::from_wayland(globals, qh, seat.as_ref()).ok();
-            }
-
-            if virtual_pointer.is_none() {
-                let remote_desktop = remote_desktop::RemoteDesktop::try_new()?;
-                virtual_pointer = Some(VirtualPointer::from_portal(
-                    remote_desktop.proxy,
-                    remote_desktop.session_handle,
-                    globals,
-                    qh,
-                )?);
-            }
+            virtual_pointer =
+                pointer::virtual_pointer(globals, qh, seat.as_ref(), cli.force_portal).ok();
         } else {
             if !cli.force_portal {
                 virtual_keyboard = seat
