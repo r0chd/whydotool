@@ -28,37 +28,36 @@ impl Whydotool {
     fn try_new(cli: &Cli, globals: &GlobalList, qh: &QueueHandle<Self>) -> anyhow::Result<Self> {
         let seat = globals.bind::<wl_seat::WlSeat, _, _>(qh, 1..=4, ()).ok();
 
-        let mut virtual_pointer = if cli.force_portal {
-            None
-        } else {
-            VirtualPointer::from_wayland(globals, qh, seat.as_ref()).ok()
-        };
+        let mut virtual_pointer = None;
+        let mut virtual_keyboard = None;
 
-        let mut virtual_keyboard = if cli.force_portal {
-            None
-        } else {
-            seat.as_ref()
-                .map(|seat| VirtualKeyboard::from_wayland(globals, qh, seat).ok())
-                .flatten()
-        };
-
-        if virtual_pointer.is_none() || virtual_keyboard.is_none() {
-            let remote_desktop = remote_desktop::RemoteDesktop::try_new()?;
-
-            if virtual_keyboard.is_none() {
-                virtual_keyboard = Some(VirtualKeyboard::from_portal(
-                    remote_desktop.proxy.clone(),
-                    remote_desktop.session_handle.clone(),
-                ));
+        if matches!(cli.cmd, Commands::Click { .. } | Commands::Mousemove { .. }) {
+            if !cli.force_portal {
+                virtual_pointer = VirtualPointer::from_wayland(globals, qh, seat.as_ref()).ok();
             }
 
             if virtual_pointer.is_none() {
+                let remote_desktop = remote_desktop::RemoteDesktop::try_new()?;
                 virtual_pointer = Some(VirtualPointer::from_portal(
                     remote_desktop.proxy,
                     remote_desktop.session_handle,
                     globals,
                     qh,
-                )?)
+                )?);
+            }
+        } else {
+            if !cli.force_portal {
+                virtual_keyboard = seat
+                    .as_ref()
+                    .and_then(|seat| VirtualKeyboard::from_wayland(globals, qh, seat).ok());
+            }
+
+            if virtual_keyboard.is_none() {
+                let remote_desktop = remote_desktop::RemoteDesktop::try_new()?;
+                virtual_keyboard = Some(VirtualKeyboard::from_portal(
+                    remote_desktop.proxy.clone(),
+                    remote_desktop.session_handle.clone(),
+                ));
             }
         }
 
