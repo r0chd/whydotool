@@ -12,11 +12,8 @@
                 rustToolchain
                 rust-analyzer-unwrapped
                 nixd
-                wayland
                 libxkbcommon
-                pipewire
                 pkg-config
-                libclang
                 ;
             };
             LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath finalAttrs.buildInputs;
@@ -26,18 +23,18 @@
       });
 
       packages = tooling.lib.forAllSystems (pkgs: {
-        clicker-rs = pkgs.callPackage ./nix/package.nix {
+        whydotool = pkgs.callPackage ./nix/package.nix {
           rustPlatform = pkgs.makeRustPlatform {
             cargo = pkgs.rustToolchain;
             rustc = pkgs.rustToolchain;
           };
         };
-        default = self.packages.${pkgs.stdenv.hostPlatform.system}.clicker-rs;
+        default = self.packages.${pkgs.stdenv.hostPlatform.system}.whydotool;
       });
 
       nixosModules = {
-        clicker-rs = import ./nix/nixos.nix;
-        default = self.nixosModules.clicker-rs;
+        whydotool = import ./nix/nixos.nix;
+        default = self.nixosModules.whydotool;
       };
     };
 }

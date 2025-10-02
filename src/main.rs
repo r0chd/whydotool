@@ -98,7 +98,49 @@ fn main() -> anyhow::Result<()> {
     event_queue.roundtrip(&mut whydotool)?;
 
     match cli.cmd {
-        Commands::Click { .. } => {}
+        Commands::Click {
+            repeat,
+            next_delay,
+            buttons,
+        } => {
+            let virtual_pointer = whydotool.virtual_pointer.take().ok_or_else(|| {
+                anyhow::anyhow!("Virtual pointer unavailable: both compositor protocol support AND desktop portal remote desktop support are missing")
+            })?;
+
+            for _ in 0..repeat {
+                for btn_str in buttons.iter() {
+                    let btn = if btn_str.starts_with("0x") || btn_str.starts_with("0X") {
+                        u8::from_str_radix(&btn_str[2..], 16)?
+                    } else {
+                        btn_str.parse::<u8>()?
+                    };
+
+                    let keycode = (btn & 0x0f) as u32 | 0x110;
+
+                    let down = btn & 0x40 != 0;
+                    let up = btn & 0x80 != 0;
+
+                    if down {
+                        virtual_pointer.button(keycode, ButtonState::Pressed);
+                    }
+
+                    if up {
+                        virtual_pointer.button(keycode, ButtonState::Released);
+                    }
+
+                    if (btn & 0xC0) == 0 {
+                        if let Some(delay) = next_delay {
+                            std::thread::sleep(Duration::from_millis(delay));
+                        }
+                    }
+
+                    if let Some(delay) = next_delay {
+                        std::thread::sleep(Duration::from_millis(delay));
+                    }
+                }
+            }
+        }
+
         Commands::Mousemove {
             wheel,
             absolute,

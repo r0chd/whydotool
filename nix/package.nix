@@ -4,6 +4,7 @@
   pkg-config,
   libxkbcommon,
   wayland,
+  ydotoolCompat ? false,
 }:
 let
   cargoToml = builtins.fromTOML (builtins.readFile ../Cargo.toml);
@@ -37,11 +38,15 @@ rustPlatform.buildRustPackage {
     wayland
   ];
 
+  postInstall = lib.optionalString ydotoolCompat ''
+    ln -s $out/bin/whydotool $out/bin/ydotool
+  '';
+
   meta = {
     description = "Wayland-native command-line automation tool.";
     homepage = "https://github.com/r0chd/whydotool";
     license = lib.licenses.mit;
-    maintainers = builtins.attrValues { inherit (lib.maintainers) unixpariah; };
+    maintainers = builtins.attrValues { inherit (lib.maintainers) r0chd; };
     platforms = lib.platforms.linux;
     mainProgram = "whydotool";
   };
