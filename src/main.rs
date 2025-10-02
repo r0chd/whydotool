@@ -7,6 +7,7 @@ use clap::Parser;
 use cli::Cli;
 use portal::remote_desktop;
 use std::time::Duration;
+use std::{fs, io};
 use virtual_device::{keyboard::VirtualKeyboard, pointer::VirtualPointer};
 use wayland_client::protocol::wl_pointer::ButtonState;
 use wayland_client::{
@@ -138,7 +139,58 @@ fn main() -> anyhow::Result<()> {
                 }
             }
         }
-        Commands::Type { .. } => {}
+        Commands::Type {
+            strings,
+            next_delay,
+            key_delay,
+            key_hold,
+            file,
+            ..
+        } => {
+            let mut virtual_keyboard = whydotool.virtual_keyboard.take().ok_or_else(|| {
+                anyhow::anyhow!("Virtual keyboard unavailable: both compositor protocol support AND desktop portal remote desktop support are missing")
+            })?;
+
+            let input = match file {
+                Some(file) if file.as_str() == "-" => {
+                    let mut buffer = String::new();
+                    io::stdin().read_line(&mut buffer)?;
+
+                    buffer.lines().map(|s| s.to_string()).collect()
+                }
+                Some(file) => fs::read_to_string(file)?
+                    .lines()
+                    .map(|s| s.to_string())
+                    .collect(),
+                None => strings,
+            };
+
+            for string in input.iter() {
+                for ch in string.chars() {
+                    if let Some((keycode, needs_shift)) = virtual_keyboard.keycode_from_char(ch) {
+                        if needs_shift {
+                            virtual_keyboard.key(42, 1); // Shift down
+                        }
+
+                        virtual_keyboard.key(keycode, 1);
+                        std::thread::sleep(Duration::from_millis(key_hold));
+                        virtual_keyboard.key(keycode, 0);
+
+                        if needs_shift {
+                            virtual_keyboard.key(42, 0); // Shift up
+                        }
+
+                        event_queue.roundtrip(&mut whydotool)?;
+
+                        std::thread::sleep(Duration::from_millis(key_delay));
+                    }
+                }
+
+                if let Some(next_delay) = next_delay {
+                    std::thread::sleep(Duration::from_millis(next_delay));
+                }
+            }
+        }
     }
 
     Ok(())

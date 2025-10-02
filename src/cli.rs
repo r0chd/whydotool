@@ -45,8 +45,8 @@ pub enum Commands {
         key_hold: u64,
 
         /// Delay N ms between command line strings
-        #[arg(short = 'D', long = "next-delay", default_value_t = 0)]
-        next_delay: u64,
+        #[arg(short = 'D', long = "next-delay")]
+        next_delay: Option<u64>,
 
         /// Input file (or "-" for stdin)
         #[arg(short = 'f', long = "file")]
@@ -57,6 +57,7 @@ pub enum Commands {
         escape: Option<u8>,
 
         /// Strings to type
+        #[arg(num_args = 0..)]
         strings: Vec<String>,
     },
     Key {
