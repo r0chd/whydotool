@@ -3,13 +3,12 @@ mod portal;
 mod virtual_device;
 
 use crate::cli::Commands;
-use crate::virtual_device::pointer;
+use crate::virtual_device::{keyboard, pointer};
 use clap::Parser;
 use cli::Cli;
-use portal::remote_desktop;
 use std::time::Duration;
 use std::{fs, io};
-use virtual_device::{keyboard::VirtualKeyboard, pointer::traits::VirtualPointer};
+use virtual_device::{keyboard::traits::VirtualKeyboard, pointer::traits::VirtualPointer};
 use wayland_client::protocol::wl_pointer::ButtonState;
 use wayland_client::{
     Connection, Dispatch, QueueHandle, delegate_dispatch, delegate_noop,
@@ -22,34 +21,26 @@ use wayland_protocols_wlr::virtual_pointer::v1::client::{
 
 struct Whydotool {
     virtual_pointer: Option<Box<dyn VirtualPointer>>,
-    virtual_keyboard: Option<VirtualKeyboard>,
+    virtual_keyboard: Option<Box<dyn VirtualKeyboard>>,
 }
 
 impl Whydotool {
     fn try_new(cli: &Cli, globals: &GlobalList, qh: &QueueHandle<Self>) -> anyhow::Result<Self> {
         let seat = globals.bind::<wl_seat::WlSeat, _, _>(qh, 1..=4, ()).ok();
 
-        let mut virtual_pointer: Option<Box<dyn VirtualPointer>> = None;
-        let mut virtual_keyboard: Option<VirtualKeyboard> = None;
+        let virtual_pointer: Option<Box<dyn VirtualPointer>> =
+            if matches!(cli.cmd, Commands::Click { .. } | Commands::Mousemove { .. }) {
+                pointer::virtual_pointer(globals, qh, seat.as_ref(), cli.force_portal).ok()
+            } else {
+                None
+            };
 
-        if matches!(cli.cmd, Commands::Click { .. } | Commands::Mousemove { .. }) {
-            virtual_pointer =
-                pointer::virtual_pointer(globals, qh, seat.as_ref(), cli.force_portal).ok();
-        } else {
-            if !cli.force_portal {
-                virtual_keyboard = seat
-                    .as_ref()
-                    .and_then(|seat| VirtualKeyboard::from_wayland(globals, qh, seat).ok());
-            }
-
-            if virtual_keyboard.is_none() {
-                let remote_desktop = remote_desktop::RemoteDesktop::try_new()?;
-                virtual_keyboard = Some(VirtualKeyboard::from_portal(
-                    remote_desktop.proxy.clone(),
-                    remote_desktop.session_handle.clone(),
-                ));
-            }
-        }
+        let virtual_keyboard: Option<Box<dyn VirtualKeyboard>> =
+            if matches!(cli.cmd, Commands::Type { .. } | Commands::Key { .. }) {
+                keyboard::virtual_keyboard(globals, qh, seat.as_ref(), cli.force_portal).ok()
+            } else {
+                None
+            };
 
         Ok(Self {
             virtual_pointer,
@@ -117,13 +108,9 @@ fn main() -> anyhow::Result<()> {
                         virtual_pointer.button(keycode, ButtonState::Released);
                     }
 
-                    if (btn & 0xC0) == 0 {
-                        if let Some(delay) = next_delay {
-                            std::thread::sleep(Duration::from_millis(delay));
-                        }
-                    }
-
-                    if let Some(delay) = next_delay {
+                    if (btn & 0xC0) == 0
+                        && let Some(delay) = next_delay
+                    {
                         std::thread::sleep(Duration::from_millis(delay));
                     }
                 }
@@ -142,12 +129,10 @@ fn main() -> anyhow::Result<()> {
 
             if wheel {
                 virtual_pointer.scroll(xpos, ypos);
+            } else if absolute {
+                virtual_pointer.motion_absolute(xpos as u32, ypos as u32);
             } else {
-                if absolute {
-                    virtual_pointer.motion_absolute(xpos as u32, ypos as u32);
-                } else {
-                    virtual_pointer.motion(xpos, ypos);
-                }
+                virtual_pointer.motion(xpos, ypos);
             }
 
             event_queue.roundtrip(&mut whydotool)?;

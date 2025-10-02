@@ -22,7 +22,7 @@ impl WaylandPointer {
     ) -> anyhow::Result<Self> {
         let virtual_pointer = globals
             .bind::<zwlr_virtual_pointer_manager_v1::ZwlrVirtualPointerManagerV1, _, _>(
-                &qh,
+                qh,
                 1..=2,
                 (),
             )
