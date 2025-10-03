@@ -11,7 +11,7 @@ impl Request {
         conn: &zbus::blocking::Connection,
         session_path: &OwnedObjectPath,
     ) -> anyhow::Result<Self> {
-        let proxy = RequestProxyBlocking::builder(&conn)
+        let proxy = RequestProxyBlocking::builder(conn)
             .path(session_path)?
             .build()?;
 

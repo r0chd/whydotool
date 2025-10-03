@@ -14,17 +14,17 @@ pub struct PortalPointer {
 }
 
 impl PortalPointer {
-    pub fn try_new(
+    pub fn new(
         proxy: RemoteDesktopProxyBlocking<'static>,
         session_handle: OwnedObjectPath,
         globals: &GlobalList,
         qh: &QueueHandle<Whydotool>,
-    ) -> anyhow::Result<Self> {
-        Ok(Self {
+    ) -> Self {
+        Self {
             outputs: Outputs::new(globals, qh),
             session_handle,
             proxy,
-        })
+        }
     }
 }
 
@@ -35,11 +35,7 @@ impl VirtualPointer for PortalPointer {
                 &self.session_handle,
                 HashMap::new(),
                 button as i32,
-                if state == wl_pointer::ButtonState::Released {
-                    0
-                } else {
-                    1
-                },
+                u32::from(state != wl_pointer::ButtonState::Released),
             )
             .unwrap();
     }
@@ -52,7 +48,7 @@ impl VirtualPointer for PortalPointer {
                 xpos as f32,
                 ypos as f32,
             )
-            .unwrap()
+            .unwrap();
     }
 
     fn motion(&self, xpos: f64, ypos: f64) {
@@ -63,7 +59,7 @@ impl VirtualPointer for PortalPointer {
                 xpos as f32,
                 ypos as f32,
             )
-            .unwrap()
+            .unwrap();
     }
 
     fn motion_absolute(&self, xpos: u32, ypos: u32) {
@@ -77,7 +73,7 @@ impl VirtualPointer for PortalPointer {
                 xpos as f32,
                 ypos as f32,
             )
-            .unwrap()
+            .unwrap();
     }
 
     fn outputs(&mut self) -> &mut Outputs {

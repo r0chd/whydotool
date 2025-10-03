@@ -96,17 +96,14 @@ fn parse_keypress(s: &str) -> Result<KeyPress, String> {
     let keycode_str = parts.next().ok_or("Missing keycode")?;
     let keycode: u32 = keycode_str
         .parse()
-        .map_err(|_: ParseIntError| format!("Invalid keycode '{}'", keycode_str))?;
+        .map_err(|_: ParseIntError| format!("Invalid keycode '{keycode_str}'"))?;
 
     let pressed_str = parts.next().ok_or("Missing pressed state")?;
     let pressed = match pressed_str {
         "0" => 0,
         "1" => 1,
         _ => {
-            return Err(format!(
-                "Pressed state must be 0 or 1, got '{}'",
-                pressed_str
-            ));
+            return Err(format!("Pressed state must be 0 or 1, got '{pressed_str}'",));
         }
     };
 

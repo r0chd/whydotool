@@ -1,3 +1,5 @@
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+
 mod cli;
 mod portal;
 mod virtual_device;
@@ -7,7 +9,7 @@ use crate::virtual_device::{keyboard, pointer};
 use clap::Parser;
 use cli::Cli;
 use std::time::Duration;
-use std::{fs, io};
+use std::{fs, io, string};
 use virtual_device::{keyboard::traits::VirtualKeyboard, pointer::traits::VirtualPointer};
 use wayland_client::protocol::wl_pointer::ButtonState;
 use wayland_client::{
@@ -25,7 +27,7 @@ struct Whydotool {
 }
 
 impl Whydotool {
-    fn try_new(cli: &Cli, globals: &GlobalList, qh: &QueueHandle<Self>) -> anyhow::Result<Self> {
+    fn new(cli: &Cli, globals: &GlobalList, qh: &QueueHandle<Self>) -> Self {
         let seat = globals.bind::<wl_seat::WlSeat, _, _>(qh, 1..=4, ()).ok();
 
         let virtual_pointer: Option<Box<dyn VirtualPointer>> =
@@ -42,10 +44,10 @@ impl Whydotool {
                 None
             };
 
-        Ok(Self {
+        Self {
             virtual_pointer,
             virtual_keyboard,
-        })
+        }
     }
 }
 
@@ -72,7 +74,7 @@ fn main() -> anyhow::Result<()> {
     let (globals, mut event_queue) = registry_queue_init(&conn)?;
     let qh = event_queue.handle();
 
-    let mut whydotool = Whydotool::try_new(&cli, &globals, &qh)?;
+    let mut whydotool = Whydotool::new(&cli, &globals, &qh);
 
     event_queue.dispatch_pending(&mut whydotool)?;
     event_queue.roundtrip(&mut whydotool)?;
@@ -88,14 +90,14 @@ fn main() -> anyhow::Result<()> {
             })?;
 
             for _ in 0..repeat {
-                for btn_str in buttons.iter() {
+                for btn_str in &buttons {
                     let btn = if btn_str.starts_with("0x") || btn_str.starts_with("0X") {
                         u8::from_str_radix(&btn_str[2..], 16)?
                     } else {
                         btn_str.parse::<u8>()?
                     };
 
-                    let keycode = (btn & 0x0f) as u32 | 0x110;
+                    let keycode = u32::from(btn & 0x0f) | 0x110;
 
                     let down = btn & 0x40 != 0;
                     let up = btn & 0x80 != 0;
@@ -172,16 +174,16 @@ fn main() -> anyhow::Result<()> {
                     let mut buffer = String::new();
                     io::stdin().read_line(&mut buffer)?;
 
-                    buffer.lines().map(|s| s.to_string()).collect()
+                    buffer.lines().map(string::ToString::to_string).collect()
                 }
                 Some(file) => fs::read_to_string(file)?
                     .lines()
-                    .map(|s| s.to_string())
+                    .map(string::ToString::to_string)
                     .collect(),
                 None => strings,
             };
 
-            for string in input.iter() {
+            for string in &input {
                 for ch in string.chars() {
                     if let Some((keycode, needs_shift)) = virtual_keyboard.keycode_from_char(ch) {
                         if needs_shift {

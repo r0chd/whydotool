@@ -17,11 +17,11 @@ pub fn virtual_pointer(
     }
 
     let remote_desktop = crate::portal::remote_desktop::RemoteDesktop::try_new()?;
-    let portal_ptr = portal::PortalPointer::try_new(
+    let portal_ptr = portal::PortalPointer::new(
         remote_desktop.proxy,
         remote_desktop.session_handle,
         globals,
         qh,
-    )?;
+    );
     Ok(Box::new(portal_ptr))
 }

@@ -16,7 +16,7 @@ impl RemoteDesktop {
         let keyboard_supported = (device_types & 1) != 0;
         let pointer_supported = (device_types & 2) != 0;
 
-        let session_token = util::SessionToken::new();
+        let session_token = util::SessionToken::default();
 
         let session_path = remote_desktop_proxy
             .create_session([("session_handle_token", session_token.into())].into())

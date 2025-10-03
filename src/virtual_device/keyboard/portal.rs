@@ -18,9 +18,9 @@ impl PortalKeyboard {
         let (xkb_state, _, _) = xkb_init();
 
         Self {
+            xkb_state,
             proxy,
             session_handle,
-            xkb_state,
         }
     }
 }
@@ -50,6 +50,6 @@ impl VirtualKeyboard for PortalKeyboard {
                 keysym.raw() as i32,
                 state,
             )
-            .unwrap()
+            .unwrap();
     }
 }

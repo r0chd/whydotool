@@ -3,8 +3,8 @@ use zbus::zvariant::Value;
 
 pub struct SessionToken(String);
 
-impl SessionToken {
-    pub fn new() -> Self {
+impl Default for SessionToken {
+    fn default() -> Self {
         let token: String = rand::rng()
             .sample_iter(&Alphanumeric)
             .take(10)
@@ -16,7 +16,7 @@ impl SessionToken {
     }
 }
 
-impl<'a> From<SessionToken> for Value<'a> {
+impl From<SessionToken> for Value<'_> {
     fn from(token: SessionToken) -> Self {
         Value::from(token.0)
     }

@@ -18,9 +18,7 @@ pub fn xkb_init() -> (xkb::State, fs::File, u32) {
     let keymap = xkb_state.get_keymap().get_as_string(KEYMAP_FORMAT_TEXT_V1);
     let keymap = CString::new(keymap).expect("Keymap should not contain interior nul bytes");
     let keymap = keymap.as_bytes_with_nul();
-    let dir = std::env::var_os("XDG_RUNTIME_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(std::env::temp_dir);
+    let dir = std::env::var_os("XDG_RUNTIME_DIR").map_or_else(std::env::temp_dir, PathBuf::from);
     let mut file = tempfile::tempfile_in(dir).expect("File could not be created!");
     file.write_all(keymap).unwrap();
     file.flush().unwrap();

@@ -44,7 +44,7 @@ pub struct Output {
 }
 
 impl Output {
-    pub fn new(wl_output: wl_output::WlOutput) -> Self {
+    pub const fn new(wl_output: wl_output::WlOutput) -> Self {
         Self {
             name: None,
             wl_output,

@@ -35,8 +35,8 @@ impl WaylandKeyboard {
         virtual_keyboard.keymap(wl_keyboard::KeymapFormat::XkbV1.into(), file.as_fd(), size);
 
         Ok(Self {
-            xkb_state,
             virtual_keyboard,
+            xkb_state,
         })
     }
 }

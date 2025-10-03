@@ -10,7 +10,7 @@ impl ScreenCast {
 
         screencast_proxy
             .select_sources(
-                &session_handle,
+                session_handle,
                 [("types", 1u32.into()), ("multiple", true.into())].into(),
             )
             .unwrap();
