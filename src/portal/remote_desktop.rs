@@ -5,7 +5,6 @@ pub struct RemoteDesktop {
     pub screencast: Option<screencast::ScreenCast>,
     pub session_handle: zbus::zvariant::OwnedObjectPath,
     pub proxy: RemoteDesktopProxyBlocking<'static>,
-    pub enabled_devices: u32,
 }
 
 pub struct RemoteDesktopBuilder {
@@ -100,7 +99,6 @@ impl RemoteDesktopBuilder {
                 screencast,
                 session_handle,
                 proxy: remote_desktop_proxy,
-                enabled_devices: selected_device_mask,
             })
         } else {
             anyhow::bail!("Remote desktop session start was rejected by the system")

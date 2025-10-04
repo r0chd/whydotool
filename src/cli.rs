@@ -14,6 +14,7 @@ pub struct Cli {
     pub cmd: Commands,
 
     /// Force input injection via xdg-desktop-portal even if native Wayland virtual devices are available.
+    #[cfg(feature = "portals")]
     #[arg(
         short = 'f',
         long,
