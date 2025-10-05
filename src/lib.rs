@@ -1,16 +1,19 @@
+mod output;
 #[cfg(feature = "portals")]
 mod portal;
 mod virtual_device;
 
+use output::Outputs;
 #[cfg(feature = "portals")]
 use portal::remote_desktop::RemoteDesktop;
+use std::fmt;
 #[cfg(feature = "portals")]
 use virtual_device::keyboard::portal::PortalKeyboard;
 #[cfg(feature = "portals")]
 use virtual_device::pointer::portal::PortalPointer;
 use virtual_device::{
     keyboard::{traits::VirtualKeyboard, wayland::WaylandKeyboard},
-    pointer::{traits::VirtualPointer, util::Outputs, wayland::WaylandPointer},
+    pointer::{traits::VirtualPointer, wayland::WaylandPointer},
 };
 use wayland_client::EventQueue;
 use wayland_client::{
@@ -21,11 +24,32 @@ use wayland_client::{
 use wayland_protocols_wlr::virtual_pointer::v1::client::{
     zwlr_virtual_pointer_manager_v1, zwlr_virtual_pointer_v1,
 };
+use xkbcommon::xkb::KeyDirection;
 
-#[derive(Debug, Clone)]
 pub struct KeyPress {
     pub keycode: u32,
-    pub pressed: u32,
+    pub pressed: KeyDirection,
+}
+
+impl fmt::Debug for KeyPress {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("KeyPress")
+            .field("keycode", &self.keycode)
+            .field("pressed", &"<KeyDirection>")
+            .finish()
+    }
+}
+
+impl Clone for KeyPress {
+    fn clone(&self) -> Self {
+        Self {
+            keycode: self.keycode,
+            pressed: match self.pressed {
+                KeyDirection::Up => KeyDirection::Up,
+                KeyDirection::Down => KeyDirection::Down,
+            },
+        }
+    }
 }
 
 pub struct Whydotool {
@@ -33,7 +57,7 @@ pub struct Whydotool {
     globals: GlobalList,
     qh: QueueHandle<Self>,
     seat: Option<wl_seat::WlSeat>,
-    outputs: Outputs,
+    pub outputs: Outputs,
 }
 
 impl Whydotool {

@@ -163,7 +163,7 @@ pub trait RemoteDesktop {
         dy: f32,
     ) -> zbus::Result<()>;
 
-    fn notify_keyboard_keysym(
+    fn notify_keyboard_keycode(
         &self,
         session_handle: &zbus::zvariant::OwnedObjectPath,
         options: HashMap<&str, zbus::zvariant::Value<'_>>,

@@ -38,7 +38,7 @@ impl Outputs {
 #[derive(Clone)]
 pub struct Output {
     pub name: Option<Box<str>>,
-    wl_output: wl_output::WlOutput,
+    pub wl_output: wl_output::WlOutput,
     pub x: i32,
     pub y: i32,
     pub width: i32,

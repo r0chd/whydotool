@@ -1,8 +1,9 @@
 use clap::Parser;
 use libwhydotool::KeyPress;
 use std::num::ParseIntError;
+use xkbcommon::xkb;
 
-#[derive(Parser, Debug)]
+#[derive(Parser)]
 #[command(name = "whydotool")]
 pub struct Cli {
     #[command(subcommand)]
@@ -84,6 +85,7 @@ pub enum Commands {
         #[arg(short = 'd', long = "key-delay")]
         key_delay: Option<u64>,
     },
+    Stdin,
 }
 
 fn parse_keypress(s: &str) -> Result<KeyPress, String> {
@@ -96,8 +98,8 @@ fn parse_keypress(s: &str) -> Result<KeyPress, String> {
 
     let pressed_str = parts.next().ok_or("Missing pressed state")?;
     let pressed = match pressed_str {
-        "0" => 0,
-        "1" => 1,
+        "0" => xkb::KeyDirection::Up,
+        "1" => xkb::KeyDirection::Down,
         _ => {
             return Err(format!("Pressed state must be 0 or 1, got '{pressed_str}'",));
         }

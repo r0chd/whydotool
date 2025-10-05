@@ -80,13 +80,13 @@ impl VirtualPointer for PortalPointer {
 
         let pw_fd = self.screencast.open_pipewire_remote().unwrap();
         let thread_loop =
-            unsafe { pw::thread_loop::ThreadLoop::new(Some("whydotool"), None).unwrap() };
+            unsafe { pw::thread_loop::ThreadLoopRc::new(Some("whydotool"), None).unwrap() };
         let _lock = thread_loop.lock();
-        let context = pw::context::Context::new(&thread_loop).unwrap();
-        let core = context.connect_fd(pw_fd.into(), None).unwrap();
+        let context = pw::context::ContextRc::new(&thread_loop, None).unwrap();
+        let core = context.connect_fd_rc(pw_fd.into(), None).unwrap();
 
-        let stream = pw::stream::Stream::new(
-            &core,
+        let stream = pw::stream::StreamRc::new(
+            core.clone(),
             "whydotool",
             properties! {
                 *pipewire::keys::MEDIA_CLASS => "Video/Source",

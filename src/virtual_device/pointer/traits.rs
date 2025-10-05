@@ -1,4 +1,4 @@
-use crate::virtual_device::pointer::util::Outputs;
+use crate::output::Outputs;
 use wayland_client::protocol::wl_pointer;
 
 pub trait VirtualPointer {

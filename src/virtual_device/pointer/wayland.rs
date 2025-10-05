@@ -1,5 +1,5 @@
-use super::{traits::VirtualPointer, util::Outputs};
-use crate::Whydotool;
+use super::traits::VirtualPointer;
+use crate::{Whydotool, output::Outputs};
 use wayland_client::{
     QueueHandle,
     globals::GlobalList,

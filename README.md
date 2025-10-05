@@ -10,6 +10,7 @@ Inspired by [ydotool](https://github.com/ReimuNotMoe/ydotool), it simulates keyb
 - `mousemove` - Move the pointer (relative or absolute)
 - `type` - type strings of text
 - `key`- press and release individual keys
+- `stdin` - stream key events from standard input in real time
 - no root required
 - no daemon required
 

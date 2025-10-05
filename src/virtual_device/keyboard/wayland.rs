@@ -9,7 +9,8 @@ use wayland_client::{
 use wayland_protocols_misc::zwp_virtual_keyboard_v1::client::{
     zwp_virtual_keyboard_manager_v1, zwp_virtual_keyboard_v1,
 };
-use xkbcommon::xkb;
+use xkbcommon::xkb::Keycode;
+use xkbcommon::xkb::{self, KeyDirection};
 
 pub struct WaylandKeyboard {
     virtual_keyboard: zwp_virtual_keyboard_v1::ZwpVirtualKeyboardV1,
@@ -46,24 +47,20 @@ impl VirtualKeyboard for WaylandKeyboard {
         &mut self.xkb_state
     }
 
-    fn key(&mut self, key: u32, state: u32) {
-        let direction = if state == 1 {
-            xkb::KeyDirection::Down
-        } else {
-            xkb::KeyDirection::Up
+    fn key(&mut self, key: Keycode, state: KeyDirection) {
+        let raw_state = match state {
+            KeyDirection::Down => 1,
+            _ => 0,
         };
 
-        // xkbcommon uses keycodes with an offset of 8
-        let keycode = key + 8;
-        let xkb_keycode = xkb::Keycode::new(keycode);
-        self.xkb_state.update_key(xkb_keycode, direction);
+        self.xkb_state.update_key(key, state);
 
         let depressed = self.xkb_state.serialize_mods(xkb::STATE_MODS_DEPRESSED);
         let latched = self.xkb_state.serialize_mods(xkb::STATE_MODS_LATCHED);
         let locked = self.xkb_state.serialize_mods(xkb::STATE_MODS_LOCKED);
         let group = self.xkb_state.serialize_layout(xkb::STATE_LAYOUT_EFFECTIVE);
 
-        self.virtual_keyboard.key(0, key, state);
+        self.virtual_keyboard.key(0, key.raw() - 8, raw_state);
         self.virtual_keyboard
             .modifiers(depressed, latched, locked, group);
     }

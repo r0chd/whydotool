@@ -1,16 +1,21 @@
 mod cli;
+mod stdin;
 
-use crate::cli::Commands;
 use clap::Parser;
 use cli::Cli;
+use cli::Commands;
 use libwhydotool::Whydotool;
+use std::io::Read;
 use std::{fs, io, time::Duration};
 use wayland_client::protocol::wl_pointer::ButtonState;
+use xkbcommon::xkb;
 
 fn main() -> anyhow::Result<()> {
     let cli = Cli::try_parse()?;
 
     let (mut event_queue, mut whydotool) = Whydotool::try_new()?;
+    #[cfg(feature = "portals")]
+    whydotool.force_portal(cli.force_portal);
 
     event_queue.dispatch_pending(&mut whydotool)?;
     event_queue.roundtrip(&mut whydotool)?;
@@ -88,7 +93,9 @@ fn main() -> anyhow::Result<()> {
                     anyhow::anyhow!("Virtual keyboard unavailable: both compositor protocol support AND desktop portal remote desktop support are missing")
                 })?;
 
-                virtual_keyboard.key(key_press.keycode, key_press.pressed);
+                // xkbcommon uses keycodes with an offset of 8
+                let keycode = xkb::Keycode::new(key_press.keycode + 8);
+                virtual_keyboard.key(keycode, key_press.pressed);
 
                 if let Some(key_delay) = key_delay {
                     std::thread::sleep(Duration::from_millis(key_delay));
@@ -125,15 +132,19 @@ fn main() -> anyhow::Result<()> {
                 for ch in string.chars() {
                     if let Some((keycode, needs_shift)) = virtual_keyboard.keycode_from_char(ch) {
                         if needs_shift {
-                            virtual_keyboard.key(42, 1); // Shift down
+                            // xkbcommon uses keycodes with an offset of 8
+                            let keycode = xkb::Keycode::new(42 + 8);
+                            virtual_keyboard.key(keycode, xkb::KeyDirection::Down); // Shift down
                         }
 
-                        virtual_keyboard.key(keycode, 1);
+                        virtual_keyboard.key(keycode, xkb::KeyDirection::Down);
                         std::thread::sleep(Duration::from_millis(key_hold));
-                        virtual_keyboard.key(keycode, 0);
+                        virtual_keyboard.key(keycode, xkb::KeyDirection::Up);
 
                         if needs_shift {
-                            virtual_keyboard.key(42, 0); // Shift up
+                            // xkbcommon uses keycodes with an offset of 8
+                            let keycode = xkb::Keycode::new(42 + 8);
+                            virtual_keyboard.key(keycode, xkb::KeyDirection::Up); // Shift up
                         }
 
                         event_queue.roundtrip(&mut whydotool)?;
@@ -144,6 +155,68 @@ fn main() -> anyhow::Result<()> {
 
                 if let Some(next_delay) = next_delay {
                     std::thread::sleep(Duration::from_millis(next_delay));
+                }
+            }
+        }
+        Commands::Stdin => {
+            let mut virtual_keyboard = whydotool.virtual_keyboard().map_err(|_| {
+                anyhow::anyhow!("Virtual keyboard unavailable: both compositor protocol support AND desktop portal remote desktop support are missing")
+            })?;
+            let _terminal = stdin::Terminal::configure()?;
+
+            println!("Type anything (CTRL-C to exit):");
+
+            let stdin = std::io::stdin();
+            let mut handle = stdin.lock();
+
+            loop {
+                let mut buffer = [0u8; 3];
+                handle.read(&mut buffer[..3])?;
+
+                println!("Key code: {} {} {}", buffer[0], buffer[1], buffer[2]);
+
+                let Some((keycode, is_uppercase)) =
+                    (if buffer[0] == 27 && buffer[1] == 91 && buffer[2] >= 65 && buffer[2] <= 76 {
+                        let key = match buffer[2] {
+                            65 => 103, // KEY_UP
+                            66 => 108, // KEY_DOWN
+                            67 => 106, // KEY_RIGHT
+                            68 => 105, // KEY_LEFT
+                            53 => 104, // KEY_PAGEUP
+                            54 => 109, // KEY_PAGEDOWN
+                            70 => 107, // KEY_END
+                            72 => 102, // KEY_HOME
+                            _ => continue,
+                        };
+
+                        Some((xkb::Keycode::new(key + 8), false))
+                    } else {
+                        virtual_keyboard.keycode_from_char(buffer[0] as char)
+                    })
+                else {
+                    continue;
+                };
+
+                if is_uppercase {
+                    // xkbcommon uses keycodes with an offset of 8
+                    let keycode = xkb::Keycode::new(42 + 8);
+                    virtual_keyboard.key(keycode, xkb::KeyDirection::Down); // Shift down
+                }
+
+                {
+                    if let Some(name) = virtual_keyboard.xkb_state().key_get_one_sym(keycode).name()
+                    {
+                        println!("  Maps to: {name}");
+                    }
+                }
+
+                virtual_keyboard.key(keycode, xkb::KeyDirection::Down);
+                virtual_keyboard.key(keycode, xkb::KeyDirection::Up);
+
+                if is_uppercase {
+                    // xkbcommon uses keycodes with an offset of 8
+                    let keycode = xkb::Keycode::new(42 + 8);
+                    virtual_keyboard.key(keycode, xkb::KeyDirection::Up); // Shift up
                 }
             }
         }
