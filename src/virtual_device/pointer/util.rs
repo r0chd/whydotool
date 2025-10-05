@@ -3,6 +3,7 @@ use wayland_client::{
     Connection, Dispatch, Proxy, QueueHandle, globals::GlobalList, protocol::wl_output,
 };
 
+#[derive(Clone)]
 pub struct Outputs(Vec<Output>);
 
 impl Outputs {
@@ -34,6 +35,7 @@ impl Outputs {
     }
 }
 
+#[derive(Clone)]
 pub struct Output {
     pub name: Option<Box<str>>,
     wl_output: wl_output::WlOutput,
@@ -65,11 +67,10 @@ impl Dispatch<wl_output::WlOutput, ()> for Whydotool {
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
-        if let Some(virtual_pointer) = state.virtual_pointer.as_mut()
-            && let Some(output) = virtual_pointer
-                .outputs()
-                .iter_mut()
-                .find(|output| output.wl_output == *wl_output)
+        if let Some(output) = state
+            .outputs
+            .iter_mut()
+            .find(|output| output.wl_output == *wl_output)
         {
             match event {
                 wl_output::Event::Name { name } => output.name = Some(name.into()),

@@ -13,7 +13,7 @@ impl ScreenCast {
         request: &mut request::Request,
         session_handle: OwnedObjectPath,
     ) -> anyhow::Result<Self> {
-        let screencast_proxy = ScreenCastProxyBlocking::new(&conn)?;
+        let screencast_proxy = ScreenCastProxyBlocking::new(conn)?;
 
         screencast_proxy
             .select_sources(

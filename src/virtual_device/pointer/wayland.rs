@@ -19,6 +19,7 @@ impl WaylandPointer {
         globals: &GlobalList,
         qh: &QueueHandle<Whydotool>,
         seat: Option<&wl_seat::WlSeat>,
+        outputs: Outputs,
     ) -> anyhow::Result<Self> {
         let virtual_pointer = globals
             .bind::<zwlr_virtual_pointer_manager_v1::ZwlrVirtualPointerManagerV1, _, _>(
@@ -32,7 +33,7 @@ impl WaylandPointer {
 
         Ok(Self {
             virtual_pointer,
-            outputs: Outputs::new(globals, qh),
+            outputs,
         })
     }
 }

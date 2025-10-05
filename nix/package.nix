@@ -4,7 +4,9 @@
   pkg-config,
   libxkbcommon,
   wayland,
+  pipewire,
   ydotoolCompat ? false,
+  portals ? false,
 }:
 let
   cargoToml = builtins.fromTOML (builtins.readFile ../Cargo.toml);
@@ -36,7 +38,12 @@ rustPlatform.buildRustPackage {
   buildInputs = [
     libxkbcommon
     wayland
+  ]
+  ++ lib.optionals portals [
+    pipewire
   ];
+
+  cargoFeatures = lib.optionals portals [ "portal" ];
 
   postInstall = lib.optionalString ydotoolCompat ''
     ln -s $out/bin/whydotool $out/bin/ydotool

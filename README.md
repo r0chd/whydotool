@@ -1,41 +1,97 @@
 # whydotool
+
 A Wayland-native command-line automation tool.
 
-Inspired by [ydotool](https://github.com/ReimuNotMoe/ydotool), it leverages native Wayland protocols to simulate input without requiring low-level kernel access.
+Inspired by [ydotool](https://github.com/ReimuNotMoe/ydotool), it simulates keyboard and mouse input using native Wayland protocols, no root privileges, no daemons, no kernel hacks.
+
+## Features
+
+- `click` - simulate mouse button presses
+- `mousemove` - Move the pointer (relative or absolute)
+- `type` - type strings of text
+- `key`- press and release individual keys
+- no root required
+- no daemon required
 
 ## Requirements
 
-`whydotool` works with most major Wayland compositors through either direct protocol support or the `xdg-desktop-portal` RemoteDesktop interface.
+`whydotool` works on most major Wayland compositors via either:
+
+- Native Wayland protocols
+
+- `xdg-desktop-portal` RemoteDesktop interface
 
 ### Protocol Support
 
-**For keyboard commands** (`key`, `type`, `stdin`):
-- `wp_virtual_keyboard` protocol ([compositor support](https://wayland.app/protocols/virtual-keyboard-unstable-v1#compositor-support))
+**Keyboard input** (`key`, `type`):
+- [`wp_virtual_keyboard`](https://wayland.app/protocols/virtual-keyboard-unstable-v1#compositor-support)
 
-**For pointer commands** (`click`, `mousemove`):
-- `wlr_virtual_pointer` protocol ([compositor support](https://wayland.app/protocols/wlr-virtual-pointer-unstable-v1#compositor-support))
+**Pointer input** (`click`, `mousemove`):
+-  [`wlr_virtual_pointer`](https://wayland.app/protocols/wlr-virtual-pointer-unstable-v1#compositor-support)
 
 **Universal alternative:**
-- `xdg-desktop-portal` with RemoteDesktop interface ([compositor support](https://wiki.archlinux.org/title/XDG_Desktop_Portal#List_of_backends_and_interfaces)) - supported by all major desktop compositors (GNOME, KDE Plasma, etc.)
+If your compositor doesn’t support the above protocols, whydotool can use the xdg-desktop-portal RemoteDesktop interface.
+See the [list of supported backends](https://wiki.archlinux.org/title/XDG_Desktop_Portal#List_of_backends_and_interfaces)
 
 If your compositor doesn't support the specific protocols above, it will likely work through the portal interface. Check the linked compatibility tables to verify support for your compositor.
 
-## Compatibility
+## Optional Dependency
 
-whydotool aims to be fully compatible with ydotool. Currently supported commands:
+`portal` (disabled by default)
+The `portal` backend enables input injection via the `xdg-desktop-portal` RemoteDesktop interface.
+Use this if your compositor lacks native virtual input protocol support.
 
-- [x] click - Click on mouse buttons
-- [x] mousemove - Move mouse pointer to relative or absolute position (absolute position is protocol only atm)
-- [x] type - Type a string
-- [x] key - Press keys
+Build with:
+
+```
+cargo build --features portal
+```
+
+This increases compatibility with desktop environments like GNOME (doesn't support neither of protocols) and KDE Plasma (doesn't support virtual-keyboard protocol)
+
+## Examples
+
+Type text:
+
+```
+whydotool type "Hello Wayland"
+```
+
+Press a key:
+
+```
+whydotool key 56:1 62:1 62:0 56:0
+```
+
+Relatively move mouse pointer by -100,100:
+
+```
+whydotool mousemove -x -100 -y 100
+```
+
+Move mouse pointer to 100,100:
+
+```
+whydotool mousemove --absolute -x 100 -y 100
+```
+
+Mouse right click:
+
+```
+whydotool click 0xC1
+```
+
+Mouse repeating left click:
+
+```
+whydotool click --repeat 5 --next-delay 25 0xC0
+```
 
 ## whydotool vs. ydotool
 
 | Feature | whydotool | ydotool |
 |---------|-----------|---------|
 | **Compatibility** | Wayland only | Runs everywhere |
-| **Architecture** | Fully Userspace | Kernelspace |
 | **Security Model** | Uses compositor-granted Wayland protocols or xdg-desktop-portal | Writes directly to uinput |
 | **Privileges** | Does not require root | Requires root privileges |
 | **Daemon** | Daemonless | Requires a running daemon |
-| **Speed** | Slower | Faster (direct kernel-level input injection) |

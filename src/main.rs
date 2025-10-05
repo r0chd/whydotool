@@ -1,104 +1,16 @@
 mod cli;
-#[cfg(feature = "portals")]
-mod portal;
-mod virtual_device;
 
 use crate::cli::Commands;
-use crate::virtual_device::{keyboard, pointer};
 use clap::Parser;
 use cli::Cli;
-use std::time::Duration;
-use std::{fs, io, string};
-use virtual_device::{keyboard::traits::VirtualKeyboard, pointer::traits::VirtualPointer};
+use libwhydotool::Whydotool;
+use std::{fs, io, time::Duration};
 use wayland_client::protocol::wl_pointer::ButtonState;
-use wayland_client::{
-    Connection, Dispatch, QueueHandle, delegate_dispatch, delegate_noop,
-    globals::{GlobalList, GlobalListContents, registry_queue_init},
-    protocol::{wl_registry, wl_seat},
-};
-use wayland_protocols_wlr::virtual_pointer::v1::client::{
-    zwlr_virtual_pointer_manager_v1, zwlr_virtual_pointer_v1,
-};
-
-struct Whydotool {
-    virtual_pointer: Option<Box<dyn VirtualPointer>>,
-    virtual_keyboard: Option<Box<dyn VirtualKeyboard>>,
-}
-
-impl Whydotool {
-    #[cfg(feature = "portals")]
-    fn new(cli: &Cli, globals: &GlobalList, qh: &QueueHandle<Self>) -> Self {
-        let seat = globals.bind::<wl_seat::WlSeat, _, _>(qh, 1..=4, ()).ok();
-
-        let virtual_pointer: Option<Box<dyn VirtualPointer>> =
-            if matches!(cli.cmd, Commands::Click { .. } | Commands::Mousemove { .. }) {
-                pointer::virtual_pointer(globals, qh, seat.as_ref(), cli.force_portal).ok()
-            } else {
-                None
-            };
-
-        let virtual_keyboard: Option<Box<dyn VirtualKeyboard>> =
-            if matches!(cli.cmd, Commands::Type { .. } | Commands::Key { .. }) {
-                keyboard::virtual_keyboard(globals, qh, seat.as_ref(), cli.force_portal).ok()
-            } else {
-                None
-            };
-
-        Self {
-            virtual_pointer,
-            virtual_keyboard,
-        }
-    }
-
-    #[cfg(not(feature = "portals"))]
-    fn new(cli: &Cli, globals: &GlobalList, qh: &QueueHandle<Self>) -> Self {
-        let seat = globals.bind::<wl_seat::WlSeat, _, _>(qh, 1..=4, ()).ok();
-
-        let virtual_pointer: Option<Box<dyn VirtualPointer>> =
-            if matches!(cli.cmd, Commands::Click { .. } | Commands::Mousemove { .. }) {
-                pointer::virtual_pointer(globals, qh, seat.as_ref()).ok()
-            } else {
-                None
-            };
-
-        let virtual_keyboard: Option<Box<dyn VirtualKeyboard>> =
-            if matches!(cli.cmd, Commands::Type { .. } | Commands::Key { .. }) {
-                keyboard::virtual_keyboard(globals, qh, seat.as_ref()).ok()
-            } else {
-                None
-            };
-
-        Self {
-            virtual_pointer,
-            virtual_keyboard,
-        }
-    }
-}
-
-impl Dispatch<wl_seat::WlSeat, ()> for Whydotool {
-    fn event(
-        _: &mut Self,
-        _: &wl_seat::WlSeat,
-        _: <wl_seat::WlSeat as wayland_client::Proxy>::Event,
-        _: &(),
-        _: &Connection,
-        _: &QueueHandle<Self>,
-    ) {
-    }
-}
-
-delegate_dispatch!(Whydotool: [wl_registry::WlRegistry: GlobalListContents] => Whydotool);
-delegate_noop!(Whydotool: zwlr_virtual_pointer_manager_v1::ZwlrVirtualPointerManagerV1);
-delegate_noop!(Whydotool: zwlr_virtual_pointer_v1::ZwlrVirtualPointerV1);
 
 fn main() -> anyhow::Result<()> {
     let cli = Cli::try_parse()?;
 
-    let conn = Connection::connect_to_env()?;
-    let (globals, mut event_queue) = registry_queue_init(&conn)?;
-    let qh = event_queue.handle();
-
-    let mut whydotool = Whydotool::new(&cli, &globals, &qh);
+    let (mut event_queue, mut whydotool) = Whydotool::try_new()?;
 
     event_queue.dispatch_pending(&mut whydotool)?;
     event_queue.roundtrip(&mut whydotool)?;
@@ -109,7 +21,7 @@ fn main() -> anyhow::Result<()> {
             next_delay,
             buttons,
         } => {
-            let virtual_pointer = whydotool.virtual_pointer.take().ok_or_else(|| {
+            let virtual_pointer = whydotool.virtual_pointer().map_err(|_| {
                 anyhow::anyhow!("Virtual pointer unavailable: both compositor protocol support AND desktop portal remote desktop support are missing")
             })?;
 
@@ -134,6 +46,8 @@ fn main() -> anyhow::Result<()> {
                         virtual_pointer.button(keycode, ButtonState::Released);
                     }
 
+                    event_queue.roundtrip(&mut whydotool)?;
+
                     if (btn & 0xC0) == 0
                         && let Some(delay) = next_delay
                     {
@@ -149,7 +63,7 @@ fn main() -> anyhow::Result<()> {
             xpos,
             ypos,
         } => {
-            let virtual_pointer = whydotool.virtual_pointer.take().ok_or_else(|| {
+            let virtual_pointer = whydotool.virtual_pointer().map_err(|_| {
                 anyhow::anyhow!("Virtual pointer unavailable: both compositor protocol support AND desktop portal remote desktop support are missing")
             })?;
 
@@ -167,14 +81,14 @@ fn main() -> anyhow::Result<()> {
             key_presses,
             key_delay,
         } => {
-            let mut virtual_keyboard = whydotool.virtual_keyboard.take().ok_or_else(|| {
-                anyhow::anyhow!("Virtual keyboard unavailable: both compositor protocol support AND desktop portal remote desktop support are missing")
-            })?;
-
             for key_press in key_presses {
-                virtual_keyboard.key(key_press.keycode, key_press.pressed);
-
                 event_queue.roundtrip(&mut whydotool)?;
+
+                let mut virtual_keyboard = whydotool.virtual_keyboard().map_err(|_| {
+                    anyhow::anyhow!("Virtual keyboard unavailable: both compositor protocol support AND desktop portal remote desktop support are missing")
+                })?;
+
+                virtual_keyboard.key(key_press.keycode, key_press.pressed);
 
                 if let Some(key_delay) = key_delay {
                     std::thread::sleep(Duration::from_millis(key_delay));
@@ -189,25 +103,25 @@ fn main() -> anyhow::Result<()> {
             file,
             ..
         } => {
-            let mut virtual_keyboard = whydotool.virtual_keyboard.take().ok_or_else(|| {
-                anyhow::anyhow!("Virtual keyboard unavailable: both compositor protocol support AND desktop portal remote desktop support are missing")
-            })?;
-
             let input = match file {
                 Some(file) if file.as_str() == "-" => {
                     let mut buffer = String::new();
                     io::stdin().read_line(&mut buffer)?;
 
-                    buffer.lines().map(string::ToString::to_string).collect()
+                    buffer.lines().map(ToString::to_string).collect()
                 }
                 Some(file) => fs::read_to_string(file)?
                     .lines()
-                    .map(string::ToString::to_string)
+                    .map(ToString::to_string)
                     .collect(),
                 None => strings,
             };
 
-            for string in &input {
+            let mut virtual_keyboard = whydotool.virtual_keyboard().map_err(|_| {
+                anyhow::anyhow!("Virtual keyboard unavailable: both compositor protocol support AND desktop portal remote desktop support are missing")
+            })?;
+
+            for string in input {
                 for ch in string.chars() {
                     if let Some((keycode, needs_shift)) = virtual_keyboard.keycode_from_char(ch) {
                         if needs_shift {

@@ -7,20 +7,11 @@ pub struct RemoteDesktop {
     pub proxy: RemoteDesktopProxyBlocking<'static>,
 }
 
+#[derive(Default)]
 pub struct RemoteDesktopBuilder {
     enable_keyboard: bool,
     enable_pointer: bool,
     enable_screencast: bool,
-}
-
-impl Default for RemoteDesktopBuilder {
-    fn default() -> Self {
-        Self {
-            enable_keyboard: false,
-            enable_pointer: false,
-            enable_screencast: false,
-        }
-    }
 }
 
 impl RemoteDesktopBuilder {

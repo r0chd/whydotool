@@ -1,11 +1,6 @@
 use clap::Parser;
+use libwhydotool::KeyPress;
 use std::num::ParseIntError;
-
-#[derive(Debug, Clone)]
-pub struct KeyPress {
-    pub keycode: u32,
-    pub pressed: u32,
-}
 
 #[derive(Parser, Debug)]
 #[command(name = "whydotool")]
