@@ -1,4 +1,4 @@
 pub mod remote_desktop;
 mod request;
-mod screencast;
+pub mod screencast;
 mod util;

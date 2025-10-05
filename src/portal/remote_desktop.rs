@@ -1,13 +1,49 @@
-use super::{request, util};
+use super::{request, screencast, util};
 use std::collections::HashMap;
 
 pub struct RemoteDesktop {
+    pub screencast: Option<screencast::ScreenCast>,
     pub session_handle: zbus::zvariant::OwnedObjectPath,
     pub proxy: RemoteDesktopProxyBlocking<'static>,
 }
 
-impl RemoteDesktop {
-    pub fn try_new() -> anyhow::Result<Self> {
+pub struct RemoteDesktopBuilder {
+    enable_keyboard: bool,
+    enable_pointer: bool,
+    enable_screencast: bool,
+}
+
+impl Default for RemoteDesktopBuilder {
+    fn default() -> Self {
+        Self {
+            enable_keyboard: false,
+            enable_pointer: false,
+            enable_screencast: false,
+        }
+    }
+}
+
+impl RemoteDesktopBuilder {
+    fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn keyboard(mut self, enable: bool) -> Self {
+        self.enable_keyboard = enable;
+        self
+    }
+
+    pub fn pointer(mut self, enable: bool) -> Self {
+        self.enable_pointer = enable;
+        self
+    }
+
+    pub fn screencast(mut self, enable: bool) -> Self {
+        self.enable_screencast = enable;
+        self
+    }
+
+    pub fn try_build(self) -> anyhow::Result<RemoteDesktop> {
         let conn = zbus::blocking::Connection::session()?;
         let remote_desktop_proxy = RemoteDesktopProxyBlocking::new(&conn)?;
 
@@ -25,15 +61,13 @@ impl RemoteDesktop {
         let mut request = request::Request::try_new(&conn, &session_path)?;
         let session_handle = request.get_session_handle();
 
-        let selected_device_mask = if keyboard_supported && pointer_supported {
-            1 | 2
-        } else if keyboard_supported {
-            1
-        } else if pointer_supported {
-            2
-        } else {
-            0
-        };
+        let mut selected_device_mask = 0;
+        if self.enable_keyboard && keyboard_supported {
+            selected_device_mask |= 1;
+        }
+        if self.enable_pointer && pointer_supported {
+            selected_device_mask |= 2;
+        }
 
         remote_desktop_proxy.select_devices(
             &session_handle,
@@ -42,6 +76,16 @@ impl RemoteDesktop {
 
         request.next_response().unwrap().args()?;
 
+        let screencast = if self.enable_screencast {
+            Some(screencast::ScreenCast::try_new(
+                &conn,
+                &mut request,
+                session_handle.clone(),
+            )?)
+        } else {
+            None
+        };
+
         remote_desktop_proxy.start(
             &session_handle,
             "",
@@ -49,14 +93,22 @@ impl RemoteDesktop {
         )?;
 
         let res = request.next_response().unwrap();
+
         if res.args()?.response == 0 {
-            Ok(Self {
+            Ok(RemoteDesktop {
+                screencast,
                 session_handle,
                 proxy: remote_desktop_proxy,
             })
         } else {
             anyhow::bail!("Remote desktop session start was rejected by the system")
         }
+    }
+}
+
+impl RemoteDesktop {
+    pub fn builder() -> RemoteDesktopBuilder {
+        RemoteDesktopBuilder::new()
     }
 }
 

@@ -1,6 +1,5 @@
-#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
-
 mod cli;
+#[cfg(feature = "portals")]
 mod portal;
 mod virtual_device;
 
@@ -27,6 +26,7 @@ struct Whydotool {
 }
 
 impl Whydotool {
+    #[cfg(feature = "portals")]
     fn new(cli: &Cli, globals: &GlobalList, qh: &QueueHandle<Self>) -> Self {
         let seat = globals.bind::<wl_seat::WlSeat, _, _>(qh, 1..=4, ()).ok();
 
@@ -40,6 +40,30 @@ impl Whydotool {
         let virtual_keyboard: Option<Box<dyn VirtualKeyboard>> =
             if matches!(cli.cmd, Commands::Type { .. } | Commands::Key { .. }) {
                 keyboard::virtual_keyboard(globals, qh, seat.as_ref(), cli.force_portal).ok()
+            } else {
+                None
+            };
+
+        Self {
+            virtual_pointer,
+            virtual_keyboard,
+        }
+    }
+
+    #[cfg(not(feature = "portals"))]
+    fn new(cli: &Cli, globals: &GlobalList, qh: &QueueHandle<Self>) -> Self {
+        let seat = globals.bind::<wl_seat::WlSeat, _, _>(qh, 1..=4, ()).ok();
+
+        let virtual_pointer: Option<Box<dyn VirtualPointer>> =
+            if matches!(cli.cmd, Commands::Click { .. } | Commands::Mousemove { .. }) {
+                pointer::virtual_pointer(globals, qh, seat.as_ref()).ok()
+            } else {
+                None
+            };
+
+        let virtual_keyboard: Option<Box<dyn VirtualKeyboard>> =
+            if matches!(cli.cmd, Commands::Type { .. } | Commands::Key { .. }) {
+                keyboard::virtual_keyboard(globals, qh, seat.as_ref()).ok()
             } else {
                 None
             };
