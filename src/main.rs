@@ -27,7 +27,10 @@ fn main() -> anyhow::Result<()> {
             buttons,
         } => {
             let virtual_pointer = whydotool.virtual_pointer().map_err(|_| {
-                anyhow::anyhow!("Virtual pointer unavailable: both compositor protocol support AND desktop portal remote desktop support are missing")
+                #[cfg(feature = "portals")]
+                return anyhow::anyhow!("Virtual pointer unavailable: both compositor protocol support AND desktop portal remote desktop support are missing");
+                #[cfg(not(feature = "portals"))]
+                return anyhow::anyhow!("Virtual pointer unavailable: compositor lacks protocol support, consider compiling with `portals` feature");
             })?;
 
             for _ in 0..repeat {
@@ -69,7 +72,10 @@ fn main() -> anyhow::Result<()> {
             ypos,
         } => {
             let virtual_pointer = whydotool.virtual_pointer().map_err(|_| {
-                anyhow::anyhow!("Virtual pointer unavailable: both compositor protocol support AND desktop portal remote desktop support are missing")
+                #[cfg(feature = "portals")]
+                return anyhow::anyhow!("Virtual pointer unavailable: both compositor protocol support AND desktop portal remote desktop support are missing");
+                #[cfg(not(feature = "portals"))]
+                return anyhow::anyhow!("Virtual pointer unavailable: compositor lacks protocol support, consider compiling with `portals` feature");
             })?;
 
             if wheel {
@@ -90,7 +96,10 @@ fn main() -> anyhow::Result<()> {
                 event_queue.roundtrip(&mut whydotool)?;
 
                 let mut virtual_keyboard = whydotool.virtual_keyboard().map_err(|_| {
-                    anyhow::anyhow!("Virtual keyboard unavailable: both compositor protocol support AND desktop portal remote desktop support are missing")
+                    #[cfg(feature = "portals")]
+                    return anyhow::anyhow!("Virtual keyboard unavailable: both compositor protocol support AND desktop portal remote desktop support are missing");
+                    #[cfg(not(feature = "portals"))]
+                    return anyhow::anyhow!("Virtual keyboard unavailable: compositor lacks protocol support, consider compiling with `portals` feature");
                 })?;
 
                 // xkbcommon uses keycodes with an offset of 8
@@ -125,7 +134,10 @@ fn main() -> anyhow::Result<()> {
             };
 
             let mut virtual_keyboard = whydotool.virtual_keyboard().map_err(|_| {
-                anyhow::anyhow!("Virtual keyboard unavailable: both compositor protocol support AND desktop portal remote desktop support are missing")
+                #[cfg(feature = "portals")]
+                return anyhow::anyhow!("Virtual keyboard unavailable: both compositor protocol support AND desktop portal remote desktop support are missing");
+                #[cfg(not(feature = "portals"))]
+                return anyhow::anyhow!("Virtual keyboard unavailable: compositor lacks protocol support, consider compiling with `portals` feature");
             })?;
 
             for string in input {
@@ -160,7 +172,10 @@ fn main() -> anyhow::Result<()> {
         }
         Commands::Stdin => {
             let mut virtual_keyboard = whydotool.virtual_keyboard().map_err(|_| {
-                anyhow::anyhow!("Virtual keyboard unavailable: both compositor protocol support AND desktop portal remote desktop support are missing")
+                #[cfg(feature = "portals")]
+                return anyhow::anyhow!("Virtual keyboard unavailable: both compositor protocol support AND desktop portal remote desktop support are missing");
+                #[cfg(not(feature = "portals"))]
+                return anyhow::anyhow!("Virtual keyboard unavailable: compositor lacks protocol support, consider compiling with `portals` feature");
             })?;
             let _terminal = stdin::Terminal::configure()?;
 

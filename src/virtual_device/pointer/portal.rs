@@ -1,8 +1,7 @@
 use super::traits::VirtualPointer;
 use crate::{
-    Whydotool,
+    Outputs, Whydotool,
     portal::{remote_desktop::RemoteDesktopProxyBlocking, screencast::ScreenCast},
-    virtual_device::pointer::util::Outputs,
 };
 use pipewire::{
     self as pw,
