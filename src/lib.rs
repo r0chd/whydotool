@@ -153,10 +153,12 @@ impl Whydotool {
                 .pointer(true)
                 .screencast(true)
                 .try_build()?;
+
             let portal_ptr = PortalPointer::new(
                 remote_desktop.proxy,
                 remote_desktop.session_handle,
                 remote_desktop.screencast.unwrap(),
+                remote_desktop.streams,
                 &self.globals,
                 &self.qh,
             );

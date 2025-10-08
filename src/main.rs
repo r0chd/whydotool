@@ -2,8 +2,7 @@ mod cli;
 mod stdin;
 
 use clap::Parser;
-use cli::Cli;
-use cli::Commands;
+use cli::{Cli, Commands};
 use libwhydotool::Whydotool;
 use std::io::Read;
 use std::{fs, io, time::Duration};
@@ -186,7 +185,7 @@ fn main() -> anyhow::Result<()> {
 
             loop {
                 let mut buffer = [0u8; 3];
-                handle.read(&mut buffer[..3])?;
+                handle.read(&mut buffer)?;
 
                 println!("Key code: {} {} {}", buffer[0], buffer[1], buffer[2]);
 

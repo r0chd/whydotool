@@ -3,18 +3,15 @@ use crate::{
     Outputs, Whydotool,
     portal::{remote_desktop::RemoteDesktopProxyBlocking, screencast::ScreenCast},
 };
-use pipewire::{
-    self as pw,
-    core::PW_ID_CORE,
-    spa::{pod::Pod, utils::Direction},
-    stream::StreamFlags,
-};
-use pw::properties::properties;
+use pipewire::{self as pw, stream::StreamState};
+use pw::{properties::properties, spa, spa::pod::Pod};
 use std::collections::HashMap;
 use wayland_client::{QueueHandle, globals::GlobalList, protocol::wl_pointer};
+use zbus::zvariant;
 use zbus::zvariant::OwnedObjectPath;
 
 pub struct PortalPointer {
+    streams: Option<Vec<(u32, HashMap<String, zvariant::OwnedValue>)>>,
     outputs: Outputs,
     proxy: RemoteDesktopProxyBlocking<'static>,
     session_handle: OwnedObjectPath,
@@ -26,11 +23,13 @@ impl PortalPointer {
         proxy: RemoteDesktopProxyBlocking<'static>,
         session_handle: OwnedObjectPath,
         screencast: ScreenCast,
+        streams: Option<Vec<(u32, HashMap<String, zvariant::OwnedValue>)>>,
         globals: &GlobalList,
         qh: &QueueHandle<Whydotool>,
     ) -> Self {
         Self {
             outputs: Outputs::new(globals, qh),
+            streams,
             proxy,
             session_handle,
             screencast,
@@ -73,37 +72,32 @@ impl VirtualPointer for PortalPointer {
     }
 
     fn motion_absolute(&self, xpos: u32, ypos: u32) {
-        let (width, height) = self.outputs.dimensions();
+        let Some(node_id) = self
+            .streams
+            .as_ref()
+            .map(|streams| streams.first().map(|stream| stream.0))
+            .flatten()
+        else {
+            return;
+        };
 
         pw::init();
 
         let pw_fd = self.screencast.open_pipewire_remote().unwrap();
-        let thread_loop =
-            unsafe { pw::thread_loop::ThreadLoopRc::new(Some("whydotool"), None).unwrap() };
-        let _lock = thread_loop.lock();
-        let context = pw::context::ContextRc::new(&thread_loop, None).unwrap();
+        let mainloop = pw::main_loop::MainLoopRc::new(None).unwrap();
+        let context = pw::context::ContextRc::new(&mainloop, None).unwrap();
         let core = context.connect_fd_rc(pw_fd.into(), None).unwrap();
 
         let stream = pw::stream::StreamRc::new(
-            core.clone(),
+            core,
             "whydotool",
             properties! {
-                *pipewire::keys::MEDIA_CLASS => "Video/Source",
                 *pipewire::keys::MEDIA_TYPE => "Video",
                 *pipewire::keys::MEDIA_CATEGORY => "Capture",
-                *pipewire::keys::REMOTE_INTENTION => "screencast",
-                *pipewire::keys::APP_NAME => "whydotool",
+                *pipewire::keys::MEDIA_ROLE => "Screen",
             },
         )
         .unwrap();
-
-        let _ = stream
-            .add_local_listener()
-            .process(|stream, _: &mut ()| {
-                println!("{:?}", stream.state());
-            })
-            .register()
-            .unwrap();
 
         let obj = pw::spa::pod::object!(
             pw::spa::utils::SpaTypes::ObjectParamFormat,
@@ -133,10 +127,20 @@ impl VirtualPointer for PortalPointer {
             ),
             pw::spa::pod::property!(
                 pw::spa::param::format::FormatProperties::VideoSize,
+                Choice,
+                Range,
                 Rectangle,
                 pw::spa::utils::Rectangle {
-                    width: width as u32,
-                    height: height as u32
+                    width: 320,
+                    height: 240
+                },
+                pw::spa::utils::Rectangle {
+                    width: 1,
+                    height: 1
+                },
+                pw::spa::utils::Rectangle {
+                    width: 4096,
+                    height: 4096
                 }
             ),
             pw::spa::pod::property!(
@@ -162,38 +166,36 @@ impl VirtualPointer for PortalPointer {
 
         let mut params = [Pod::from_bytes(&values).unwrap()];
 
-        stream
-            .connect(
-                Direction::Input,
-                None,
-                StreamFlags::AUTOCONNECT,
-                &mut params,
-            )
-            .unwrap();
-
-        let thread_clone = thread_loop.clone();
-        let pending = core.sync(0).expect("sync failed");
-        let _listener_core = core
-            .add_listener_local()
-            .done(move |id, seq| {
-                if id == PW_ID_CORE && seq == pending {
-                    thread_clone.signal(false);
+        let mainloop_ref = mainloop.clone();
+        let _listener = stream
+            .add_local_listener()
+            .state_changed(move |_, _: &mut (), _, new| {
+                if new == StreamState::Streaming {
+                    mainloop_ref.quit();
                 }
             })
             .register();
 
-        thread_loop.start();
-        thread_loop.wait();
+        stream
+            .connect(
+                spa::utils::Direction::Input,
+                Some(node_id),
+                pw::stream::StreamFlags::AUTOCONNECT | pw::stream::StreamFlags::MAP_BUFFERS,
+                &mut params,
+            )
+            .unwrap();
 
         self.proxy
             .notify_pointer_motion_absolute(
                 &self.session_handle,
                 HashMap::new(),
-                stream.node_id(),
+                node_id,
                 xpos as f32,
                 ypos as f32,
             )
             .unwrap();
+
+        mainloop.run();
     }
 
     fn outputs(&mut self) -> &mut Outputs {

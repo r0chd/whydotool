@@ -24,7 +24,7 @@ Inspired by [ydotool](https://github.com/ReimuNotMoe/ydotool), it simulates keyb
 
 ### Protocol Support
 
-**Keyboard input** (`key`, `type`):
+**Keyboard input** (`key`, `type`, `stdin`):
 - [`wp_virtual_keyboard`](https://wayland.app/protocols/virtual-keyboard-unstable-v1#compositor-support)
 
 **Pointer input** (`click`, `mousemove`):
@@ -36,19 +36,20 @@ See the [list of supported backends](https://wiki.archlinux.org/title/XDG_Deskto
 
 If your compositor doesn't support the specific protocols above, it will likely work through the portal interface. Check the linked compatibility tables to verify support for your compositor.
 
-## Optional Dependency
+## Optional Features
 
-`portal` (disabled by default)
-The `portal` backend enables input injection via the `xdg-desktop-portal` RemoteDesktop interface.
-Use this if your compositor lacks native virtual input protocol support.
+### `portals` (disabled by default)
+
+The `portals` backend enables input injection via the `xdg-desktop-portal` RemoteDesktop interface.
+This is useful if your compositor doesn’t support the native virtual input protocols, like GNOME, which supports neither, or KDE Plasma, which lacks the virtual-keyboard protocol.
 
 Build with:
 
 ```
-cargo build --features portal
+cargo build --features portals
 ```
 
-This increases compatibility with desktop environments like GNOME (doesn't support neither of protocols) and KDE Plasma (doesn't support virtual-keyboard protocol)
+enabling portal drags in a bunch of heavy dependencies such as zbus and PipeWire, which significantly increases the final binary size and compilation times.
 
 ## Examples
 

@@ -43,7 +43,7 @@ rustPlatform.buildRustPackage {
     pipewire
   ];
 
-  cargoFeatures = lib.optionals portals [ "portal" ];
+  cargoFeatures = lib.optionals portals [ "portals" ];
 
   postInstall = lib.optionalString ydotoolCompat ''
     ln -s $out/bin/whydotool $out/bin/ydotool

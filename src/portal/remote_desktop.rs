@@ -1,7 +1,9 @@
 use super::{request, screencast, util};
 use std::collections::HashMap;
+use zbus::zvariant;
 
 pub struct RemoteDesktop {
+    pub streams: Option<Vec<(u32, HashMap<String, zvariant::OwnedValue>)>>,
     pub screencast: Option<screencast::ScreenCast>,
     pub session_handle: zbus::zvariant::OwnedObjectPath,
     pub proxy: RemoteDesktopProxyBlocking<'static>,
@@ -46,13 +48,12 @@ impl RemoteDesktopBuilder {
         let session_token = util::SessionToken::default();
 
         let session_path = remote_desktop_proxy
-            .create_session([("session_handle_token", session_token.into())].into())
-            .unwrap();
+            .create_session([("session_handle_token", session_token.into())].into())?;
 
         let mut request = request::Request::try_new(&conn, &session_path)?;
         let session_handle = request.get_session_handle();
 
-        let mut selected_device_mask = 0;
+        let mut selected_device_mask: u32 = 0;
         if self.enable_keyboard && keyboard_supported {
             selected_device_mask |= 1;
         }
@@ -62,17 +63,16 @@ impl RemoteDesktopBuilder {
 
         remote_desktop_proxy.select_devices(
             &session_handle,
-            [("devices", selected_device_mask.into())].into(),
+            [("types", selected_device_mask.into())].into(),
         )?;
 
         request.next_response().unwrap().args()?;
 
         let screencast = if self.enable_screencast {
-            Some(screencast::ScreenCast::try_new(
-                &conn,
-                &mut request,
-                session_handle.clone(),
-            )?)
+            let screencast =
+                screencast::ScreenCast::try_new(&conn, &mut request, session_handle.clone())?;
+
+            Some(screencast)
         } else {
             None
         };
@@ -84,9 +84,16 @@ impl RemoteDesktopBuilder {
         )?;
 
         let res = request.next_response().unwrap();
+        let args = res.args()?;
 
-        if res.args()?.response == 0 {
+        let streams: Option<Vec<(u32, HashMap<String, zvariant::OwnedValue>)>> = args
+            .results()
+            .get("streams")
+            .and_then(|v| v.to_owned().try_into().ok());
+
+        if args.response == 0 {
             Ok(RemoteDesktop {
+                streams,
                 screencast,
                 session_handle,
                 proxy: remote_desktop_proxy,
