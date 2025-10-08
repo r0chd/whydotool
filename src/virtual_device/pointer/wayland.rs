@@ -19,7 +19,6 @@ impl WaylandPointer {
         globals: &GlobalList,
         qh: &QueueHandle<Whydotool>,
         seat: Option<&wl_seat::WlSeat>,
-        outputs: Outputs,
     ) -> anyhow::Result<Self> {
         let virtual_pointer = globals
             .bind::<zwlr_virtual_pointer_manager_v1::ZwlrVirtualPointerManagerV1, _, _>(
@@ -33,8 +32,12 @@ impl WaylandPointer {
 
         Ok(Self {
             virtual_pointer,
-            outputs,
+            outputs: Outputs::new(globals, qh),
         })
+    }
+
+    pub fn outputs(&mut self) -> &mut Outputs {
+        &mut self.outputs
     }
 }
 
@@ -65,7 +68,7 @@ impl VirtualPointer for WaylandPointer {
         self.virtual_pointer.frame();
     }
 
-    fn outputs(&mut self) -> &mut Outputs {
-        &mut self.outputs
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
     }
 }

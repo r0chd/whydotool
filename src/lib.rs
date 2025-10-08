@@ -3,7 +3,6 @@ mod output;
 mod portal;
 mod virtual_device;
 
-use output::Outputs;
 #[cfg(feature = "portals")]
 use portal::remote_desktop::RemoteDesktop;
 use std::fmt;
@@ -57,7 +56,6 @@ pub struct Whydotool {
     globals: GlobalList,
     qh: QueueHandle<Self>,
     seat: Option<wl_seat::WlSeat>,
-    pub outputs: Outputs,
 }
 
 impl Whydotool {
@@ -72,7 +70,6 @@ impl Whydotool {
         Ok((
             event_queue,
             Self {
-                outputs: Outputs::new(&globals, &qh),
                 force_portal: false,
                 globals,
                 qh,
@@ -92,7 +89,6 @@ impl Whydotool {
         Ok((
             event_queue,
             Self {
-                outputs: Outputs::new(&globals, &qh),
                 force_portal: false,
                 globals,
                 qh,
@@ -120,10 +116,9 @@ impl Whydotool {
         }
         #[cfg(not(feature = "portals"))]
         {
-            let seat = self
-                .seat
-                .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("No seat provided for Wayland keyboard"))?;
+            let Some(seat) = self.seat.as_ref() else {
+                anyhow::bail!("No seat provided for Wayland keyboard")
+            };
             Ok(Box::new(WaylandKeyboard::try_new(
                 &self.globals,
                 &self.qh,
@@ -136,12 +131,8 @@ impl Whydotool {
         #[cfg(feature = "portals")]
         {
             if !self.force_portal
-                && let Ok(ptr) = WaylandPointer::try_new(
-                    &self.globals,
-                    &self.qh,
-                    self.seat.as_ref(),
-                    self.outputs.clone(),
-                )
+                && let Ok(ptr) =
+                    WaylandPointer::try_new(&self.globals, &self.qh, self.seat.as_ref())
             {
                 return Ok(Box::new(ptr));
             }
@@ -160,7 +151,6 @@ impl Whydotool {
                 &self.globals,
                 &self.qh,
                 self.seat.as_ref(),
-                self.outputs.clone(),
             )?))
         }
     }

@@ -1,8 +1,10 @@
 use super::traits::VirtualPointer;
-use crate::{Outputs, Whydotool, portal::remote_desktop::RemoteDesktop};
+use crate::portal::remote_desktop::RemoteDesktop;
+use anyhow::Context;
 use pipewire::{self as pw, stream::StreamState};
 use pw::{properties::properties, spa};
-use wayland_client::{QueueHandle, globals::GlobalList, protocol::wl_pointer};
+use std::process;
+use wayland_client::protocol::wl_pointer;
 
 pub struct PortalPointer {
     remote_desktop: RemoteDesktop,
@@ -11,6 +13,62 @@ pub struct PortalPointer {
 impl PortalPointer {
     pub fn new(remote_desktop: RemoteDesktop) -> Self {
         Self { remote_desktop }
+    }
+
+    fn motion_absolute_impl(&self, xpos: u32, ypos: u32, node_id: u32) -> anyhow::Result<()> {
+        pw::init();
+
+        let pw_fd = self
+            .remote_desktop
+            .open_pipewire_remote()
+            .context("Failed to open PipeWire remote")?;
+
+        let mainloop =
+            pw::main_loop::MainLoopRc::new(None).context("Failed to create PipeWire main loop")?;
+
+        let context = pw::context::ContextRc::new(&mainloop, None)
+            .context("Failed to create PipeWire context")?;
+
+        let core = context
+            .connect_fd_rc(pw_fd.into(), None)
+            .context("Failed to connect PipeWire core")?;
+
+        let stream = pw::stream::StreamRc::new(
+            core,
+            "whydotool",
+            properties! {
+                *pipewire::keys::MEDIA_TYPE => "Video",
+                *pipewire::keys::MEDIA_CATEGORY => "Capture",
+                *pipewire::keys::MEDIA_ROLE => "Screen",
+            },
+        )
+        .context("Failed to create PipeWire stream")?;
+
+        let mainloop_ref = mainloop.clone();
+        let _listener = stream
+            .add_local_listener()
+            .state_changed(move |_, _: &mut (), _, new| {
+                if new == StreamState::Streaming {
+                    mainloop_ref.quit();
+                }
+            })
+            .register();
+
+        stream
+            .connect(
+                spa::utils::Direction::Input,
+                Some(node_id),
+                pw::stream::StreamFlags::AUTOCONNECT | pw::stream::StreamFlags::MAP_BUFFERS,
+                &mut [],
+            )
+            .context("Failed to connect PipeWire stream")?;
+
+        self.remote_desktop
+            .notify_pointer_motion_absolute(xpos as f32, ypos as f32, node_id)
+            .context("Failed to notify pointer motion absolute")?;
+
+        mainloop.run();
+        Ok(())
     }
 }
 
@@ -34,60 +92,23 @@ impl VirtualPointer for PortalPointer {
     }
 
     fn motion_absolute(&self, xpos: u32, ypos: u32) {
-        let Some(node_id) = self
+        if let Some(node_id) = self
             .remote_desktop
             .streams()
             .as_ref()
             .and_then(|streams| streams.first().map(|stream| stream.0))
-        else {
-            return;
-        };
-
-        pw::init();
-
-        let pw_fd = self.remote_desktop.open_pipewire_remote().unwrap();
-        let mainloop = pw::main_loop::MainLoopRc::new(None).unwrap();
-        let context = pw::context::ContextRc::new(&mainloop, None).unwrap();
-        let core = context.connect_fd_rc(pw_fd.into(), None).unwrap();
-
-        let stream = pw::stream::StreamRc::new(
-            core,
-            "whydotool",
-            properties! {
-                *pipewire::keys::MEDIA_TYPE => "Video",
-                *pipewire::keys::MEDIA_CATEGORY => "Capture",
-                *pipewire::keys::MEDIA_ROLE => "Screen",
-            },
-        )
-        .unwrap();
-
-        let mainloop_ref = mainloop.clone();
-        let _listener = stream
-            .add_local_listener()
-            .state_changed(move |_, _: &mut (), _, new| {
-                if new == StreamState::Streaming {
-                    mainloop_ref.quit();
-                }
-            })
-            .register();
-
-        stream
-            .connect(
-                spa::utils::Direction::Input,
-                Some(node_id),
-                pw::stream::StreamFlags::AUTOCONNECT | pw::stream::StreamFlags::MAP_BUFFERS,
-                &mut [],
-            )
-            .unwrap();
-
-        self.remote_desktop
-            .notify_pointer_motion_absolute(xpos as f32, ypos as f32, node_id)
-            .unwrap();
-
-        mainloop.run();
+        {
+            if let Err(e) = self.motion_absolute_impl(xpos, ypos, node_id) {
+                eprintln!("motion_absolute failed: {e:#}");
+                process::exit(1);
+            }
+        } else {
+            eprintln!("No PipeWire node found for pointer motion_absolute");
+            process::exit(1);
+        }
     }
 
-    fn outputs(&mut self) -> &mut Outputs {
-        &mut self.outputs
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
     }
 }
