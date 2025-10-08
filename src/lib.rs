@@ -151,7 +151,7 @@ impl Whydotool {
                 .screencast(true)
                 .try_build()?;
 
-            let portal_ptr = PortalPointer::new(remote_desktop, &self.globals, &self.qh);
+            let portal_ptr = PortalPointer::new(remote_desktop);
             Ok(Box::new(portal_ptr))
         }
         #[cfg(not(feature = "portals"))]

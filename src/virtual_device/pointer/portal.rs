@@ -1,24 +1,16 @@
 use super::traits::VirtualPointer;
 use crate::{Outputs, Whydotool, portal::remote_desktop::RemoteDesktop};
 use pipewire::{self as pw, stream::StreamState};
-use pw::{properties::properties, spa, spa::pod::Pod};
+use pw::{properties::properties, spa};
 use wayland_client::{QueueHandle, globals::GlobalList, protocol::wl_pointer};
 
 pub struct PortalPointer {
-    outputs: Outputs,
     remote_desktop: RemoteDesktop,
 }
 
 impl PortalPointer {
-    pub fn new(
-        remote_desktop: RemoteDesktop,
-        globals: &GlobalList,
-        qh: &QueueHandle<Whydotool>,
-    ) -> Self {
-        Self {
-            outputs: Outputs::new(globals, qh),
-            remote_desktop,
-        }
+    pub fn new(remote_desktop: RemoteDesktop) -> Self {
+        Self { remote_desktop }
     }
 }
 
@@ -69,51 +61,6 @@ impl VirtualPointer for PortalPointer {
         )
         .unwrap();
 
-        let (width, height) = self.outputs.dimensions();
-
-        let obj = pw::spa::pod::object!(
-            pw::spa::utils::SpaTypes::ObjectParamFormat,
-            pw::spa::param::ParamType::EnumFormat,
-            pw::spa::pod::property!(
-                pw::spa::param::format::FormatProperties::MediaType,
-                Id,
-                pw::spa::param::format::MediaType::Video
-            ),
-            pw::spa::pod::property!(
-                pw::spa::param::format::FormatProperties::MediaSubtype,
-                Id,
-                pw::spa::param::format::MediaSubtype::Raw
-            ),
-            pw::spa::pod::property!(
-                pw::spa::param::format::FormatProperties::VideoFormat,
-                Id,
-                pw::spa::param::video::VideoFormat::RGB
-            ),
-            pw::spa::pod::property!(
-                pw::spa::param::format::FormatProperties::VideoSize,
-                Rectangle,
-                pw::spa::utils::Rectangle {
-                    width: width as u32,
-                    height: height as u32,
-                }
-            ),
-            pw::spa::pod::property!(
-                pw::spa::param::format::FormatProperties::VideoFramerate,
-                Fraction,
-                pw::spa::utils::Fraction { num: 25, denom: 1 }
-            ),
-        );
-
-        let values: Vec<u8> = pw::spa::pod::serialize::PodSerializer::serialize(
-            std::io::Cursor::new(Vec::new()),
-            &pw::spa::pod::Value::Object(obj),
-        )
-        .unwrap()
-        .0
-        .into_inner();
-
-        let mut params = [Pod::from_bytes(&values).unwrap()];
-
         let mainloop_ref = mainloop.clone();
         let _listener = stream
             .add_local_listener()
@@ -129,7 +76,7 @@ impl VirtualPointer for PortalPointer {
                 spa::utils::Direction::Input,
                 Some(node_id),
                 pw::stream::StreamFlags::AUTOCONNECT | pw::stream::StreamFlags::MAP_BUFFERS,
-                &mut params,
+                &mut [],
             )
             .unwrap();
 
