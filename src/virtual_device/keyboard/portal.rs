@@ -1,26 +1,19 @@
 use super::{traits::VirtualKeyboard, util::xkb_init};
-use crate::portal::remote_desktop::RemoteDesktopProxyBlocking;
-use std::collections::HashMap;
+use crate::portal::remote_desktop::RemoteDesktop;
 use xkbcommon::xkb::{self, KeyDirection, Keycode};
-use zbus::zvariant::OwnedObjectPath;
 
 pub struct PortalKeyboard {
     xkb_state: xkb::State,
-    proxy: RemoteDesktopProxyBlocking<'static>,
-    session_handle: OwnedObjectPath,
+    remote_desktop: RemoteDesktop,
 }
 
 impl PortalKeyboard {
-    pub fn new(
-        proxy: RemoteDesktopProxyBlocking<'static>,
-        session_handle: OwnedObjectPath,
-    ) -> Self {
+    pub fn new(remote_desktop: RemoteDesktop) -> Self {
         let (xkb_state, _, _) = xkb_init();
 
         Self {
             xkb_state,
-            proxy,
-            session_handle,
+            remote_desktop,
         }
     }
 }
@@ -31,20 +24,16 @@ impl VirtualKeyboard for PortalKeyboard {
     }
 
     fn key(&mut self, key: Keycode, state: KeyDirection) {
-        let raw_state = match state {
-            KeyDirection::Down => 1,
-            _ => 0,
+        // xkbcommon doesn't implement Copy for KeyDirection
+        let state_2 = match state {
+            KeyDirection::Down => KeyDirection::Down,
+            KeyDirection::Up => KeyDirection::Up,
         };
 
         self.xkb_state.update_key(key, state);
 
-        self.proxy
-            .notify_keyboard_keycode(
-                &self.session_handle,
-                HashMap::new(),
-                key.raw() as i32 - 8,
-                raw_state,
-            )
+        self.remote_desktop
+            .notify_keyboard_keycode(key, state_2)
             .unwrap();
     }
 }

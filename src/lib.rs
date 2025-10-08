@@ -116,10 +116,7 @@ impl Whydotool {
             }
 
             let remote_desktop = RemoteDesktop::builder().keyboard(true).try_build()?;
-            Ok(Box::new(PortalKeyboard::new(
-                remote_desktop.proxy,
-                remote_desktop.session_handle,
-            )))
+            Ok(Box::new(PortalKeyboard::new(remote_desktop)))
         }
         #[cfg(not(feature = "portals"))]
         {
@@ -154,14 +151,7 @@ impl Whydotool {
                 .screencast(true)
                 .try_build()?;
 
-            let portal_ptr = PortalPointer::new(
-                remote_desktop.proxy,
-                remote_desktop.session_handle,
-                remote_desktop.screencast.unwrap(),
-                remote_desktop.streams,
-                &self.globals,
-                &self.qh,
-            );
+            let portal_ptr = PortalPointer::new(remote_desktop, &self.globals, &self.qh);
             Ok(Box::new(portal_ptr))
         }
         #[cfg(not(feature = "portals"))]

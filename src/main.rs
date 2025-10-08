@@ -176,7 +176,8 @@ fn main() -> anyhow::Result<()> {
                 #[cfg(not(feature = "portals"))]
                 return anyhow::anyhow!("Virtual keyboard unavailable: compositor lacks protocol support, consider compiling with `portals` feature");
             })?;
-            let _terminal = stdin::Terminal::configure()?;
+            let terminal = stdin::Terminal::configure()?;
+            terminal.set_ctrlc_handler()?;
 
             println!("Type anything (CTRL-C to exit):");
 
@@ -185,7 +186,9 @@ fn main() -> anyhow::Result<()> {
 
             loop {
                 let mut buffer = [0u8; 3];
-                handle.read(&mut buffer)?;
+                let bytes_len = handle.read(&mut buffer[..3])?;
+
+                assert!(bytes_len <= buffer.len());
 
                 println!("Key code: {} {} {}", buffer[0], buffer[1], buffer[2]);
 

@@ -1,4 +1,5 @@
 use super::request;
+use anyhow::Context;
 use std::collections::HashMap;
 use zbus::zvariant::{OwnedFd, OwnedObjectPath};
 
@@ -15,14 +16,12 @@ impl ScreenCast {
     ) -> anyhow::Result<Self> {
         let screencast_proxy = ScreenCastProxyBlocking::new(conn)?;
 
-        screencast_proxy
-            .select_sources(
-                &session_handle,
-                [("types", 1u32.into()), ("multiple", true.into())].into(),
-            )
-            .unwrap();
+        screencast_proxy.select_sources(
+            &session_handle,
+            [("types", 1u32.into()), ("multiple", true.into())].into(),
+        )?;
 
-        request.next_response().unwrap();
+        request.next_response().context("Response not found")?;
 
         Ok(Self {
             proxy: screencast_proxy,

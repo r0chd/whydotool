@@ -4,8 +4,8 @@ use nix::unistd::isatty;
 use std::{fs, os::fd::FromRawFd};
 
 pub struct Terminal {
-    _old_tio: Termios,
-    _stdin_fileno: fs::File,
+    old_tio: Termios,
+    stdin_fileno: fs::File,
 }
 
 impl Terminal {
@@ -23,18 +23,32 @@ impl Terminal {
             .remove(LocalFlags::ICANON | LocalFlags::ECHO);
         tcsetattr(&stdin_fileno, SetArg::TCSANOW, &new_tio)?;
 
-        let old_tio_clone = old_tio.clone();
-        {
-            let stdin_fileno = stdin_fileno.try_clone()?;
-            ctrlc::set_handler(move || {
-                _ = tcsetattr(&stdin_fileno, SetArg::TCSANOW, &old_tio_clone);
-                std::process::exit(0);
-            })
-        }?;
-
         Ok(Self {
-            _old_tio: old_tio,
-            _stdin_fileno: stdin_fileno,
+            old_tio,
+            stdin_fileno,
         })
+    }
+
+    pub fn set_ctrlc_handler(&self) -> anyhow::Result<()> {
+        let old_tio = self.old_tio.clone();
+        let stdin_fileno = self.stdin_fileno.try_clone()?;
+
+        ctrlc::set_handler(move || {
+            _ = tcsetattr(&stdin_fileno, SetArg::TCSANOW, &old_tio);
+            std::process::exit(0);
+        })?;
+
+        Ok(())
+    }
+
+    pub fn restore(&self) -> anyhow::Result<()> {
+        tcsetattr(&self.stdin_fileno, SetArg::TCSANOW, &self.old_tio)?;
+        Ok(())
+    }
+}
+
+impl Drop for Terminal {
+    fn drop(&mut self) {
+        let _ = self.restore();
     }
 }

@@ -1,89 +1,59 @@
 use super::traits::VirtualPointer;
-use crate::{
-    Outputs, Whydotool,
-    portal::{remote_desktop::RemoteDesktopProxyBlocking, screencast::ScreenCast},
-};
+use crate::{Outputs, Whydotool, portal::remote_desktop::RemoteDesktop};
 use pipewire::{self as pw, stream::StreamState};
 use pw::{properties::properties, spa, spa::pod::Pod};
-use std::collections::HashMap;
 use wayland_client::{QueueHandle, globals::GlobalList, protocol::wl_pointer};
-use zbus::zvariant;
-use zbus::zvariant::OwnedObjectPath;
 
 pub struct PortalPointer {
-    streams: Option<Vec<(u32, HashMap<String, zvariant::OwnedValue>)>>,
     outputs: Outputs,
-    proxy: RemoteDesktopProxyBlocking<'static>,
-    session_handle: OwnedObjectPath,
-    screencast: ScreenCast,
+    remote_desktop: RemoteDesktop,
 }
 
 impl PortalPointer {
     pub fn new(
-        proxy: RemoteDesktopProxyBlocking<'static>,
-        session_handle: OwnedObjectPath,
-        screencast: ScreenCast,
-        streams: Option<Vec<(u32, HashMap<String, zvariant::OwnedValue>)>>,
+        remote_desktop: RemoteDesktop,
         globals: &GlobalList,
         qh: &QueueHandle<Whydotool>,
     ) -> Self {
         Self {
             outputs: Outputs::new(globals, qh),
-            streams,
-            proxy,
-            session_handle,
-            screencast,
+            remote_desktop,
         }
     }
 }
 
 impl VirtualPointer for PortalPointer {
     fn button(&self, button: u32, state: wl_pointer::ButtonState) {
-        self.proxy
-            .notify_pointer_button(
-                &self.session_handle,
-                HashMap::new(),
-                button as i32,
-                u32::from(state != wl_pointer::ButtonState::Released),
-            )
+        self.remote_desktop
+            .notify_pointer_button(button as i32, state)
             .unwrap();
     }
 
     fn scroll(&self, xpos: f64, ypos: f64) {
-        self.proxy
-            .notify_pointer_axis(
-                &self.session_handle,
-                HashMap::new(),
-                xpos as f32,
-                ypos as f32,
-            )
+        self.remote_desktop
+            .notify_pointer_axis(xpos as f32, ypos as f32)
             .unwrap();
     }
 
     fn motion(&self, xpos: f64, ypos: f64) {
-        self.proxy
-            .notify_pointer_motion(
-                &self.session_handle,
-                HashMap::new(),
-                xpos as f32,
-                ypos as f32,
-            )
+        self.remote_desktop
+            .notify_pointer_motion(xpos as f32, ypos as f32)
             .unwrap();
     }
 
     fn motion_absolute(&self, xpos: u32, ypos: u32) {
         let Some(node_id) = self
-            .streams
+            .remote_desktop
+            .streams()
             .as_ref()
-            .map(|streams| streams.first().map(|stream| stream.0))
-            .flatten()
+            .and_then(|streams| streams.first().map(|stream| stream.0))
         else {
             return;
         };
 
         pw::init();
 
-        let pw_fd = self.screencast.open_pipewire_remote().unwrap();
+        let pw_fd = self.remote_desktop.open_pipewire_remote().unwrap();
         let mainloop = pw::main_loop::MainLoopRc::new(None).unwrap();
         let context = pw::context::ContextRc::new(&mainloop, None).unwrap();
         let core = context.connect_fd_rc(pw_fd.into(), None).unwrap();
@@ -98,6 +68,8 @@ impl VirtualPointer for PortalPointer {
             },
         )
         .unwrap();
+
+        let (width, height) = self.outputs.dimensions();
 
         let obj = pw::spa::pod::object!(
             pw::spa::utils::SpaTypes::ObjectParamFormat,
@@ -114,48 +86,24 @@ impl VirtualPointer for PortalPointer {
             ),
             pw::spa::pod::property!(
                 pw::spa::param::format::FormatProperties::VideoFormat,
-                Choice,
-                Enum,
                 Id,
-                pw::spa::param::video::VideoFormat::RGB,
-                pw::spa::param::video::VideoFormat::RGB,
-                pw::spa::param::video::VideoFormat::RGBA,
-                pw::spa::param::video::VideoFormat::RGBx,
-                pw::spa::param::video::VideoFormat::BGRx,
-                pw::spa::param::video::VideoFormat::YUY2,
-                pw::spa::param::video::VideoFormat::I420,
+                pw::spa::param::video::VideoFormat::RGB
             ),
             pw::spa::pod::property!(
                 pw::spa::param::format::FormatProperties::VideoSize,
-                Choice,
-                Range,
                 Rectangle,
                 pw::spa::utils::Rectangle {
-                    width: 320,
-                    height: 240
-                },
-                pw::spa::utils::Rectangle {
-                    width: 1,
-                    height: 1
-                },
-                pw::spa::utils::Rectangle {
-                    width: 4096,
-                    height: 4096
+                    width: width as u32,
+                    height: height as u32,
                 }
             ),
             pw::spa::pod::property!(
                 pw::spa::param::format::FormatProperties::VideoFramerate,
-                Choice,
-                Range,
                 Fraction,
-                pw::spa::utils::Fraction { num: 25, denom: 1 },
-                pw::spa::utils::Fraction { num: 0, denom: 1 },
-                pw::spa::utils::Fraction {
-                    num: 1000,
-                    denom: 1
-                }
+                pw::spa::utils::Fraction { num: 25, denom: 1 }
             ),
         );
+
         let values: Vec<u8> = pw::spa::pod::serialize::PodSerializer::serialize(
             std::io::Cursor::new(Vec::new()),
             &pw::spa::pod::Value::Object(obj),
@@ -185,14 +133,8 @@ impl VirtualPointer for PortalPointer {
             )
             .unwrap();
 
-        self.proxy
-            .notify_pointer_motion_absolute(
-                &self.session_handle,
-                HashMap::new(),
-                node_id,
-                xpos as f32,
-                ypos as f32,
-            )
+        self.remote_desktop
+            .notify_pointer_motion_absolute(xpos as f32, ypos as f32, node_id)
             .unwrap();
 
         mainloop.run();

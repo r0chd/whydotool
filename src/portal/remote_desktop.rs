@@ -1,13 +1,9 @@
 use super::{request, screencast, util};
+use anyhow::Context;
 use std::collections::HashMap;
-use zbus::zvariant;
-
-pub struct RemoteDesktop {
-    pub streams: Option<Vec<(u32, HashMap<String, zvariant::OwnedValue>)>>,
-    pub screencast: Option<screencast::ScreenCast>,
-    pub session_handle: zbus::zvariant::OwnedObjectPath,
-    pub proxy: RemoteDesktopProxyBlocking<'static>,
-}
+use wayland_client::protocol::wl_pointer;
+use xkbcommon::xkb::{KeyDirection, Keycode};
+use zbus::zvariant::{self, OwnedFd};
 
 #[derive(Default)]
 pub struct RemoteDesktopBuilder {
@@ -104,9 +100,90 @@ impl RemoteDesktopBuilder {
     }
 }
 
+pub struct RemoteDesktop {
+    streams: Option<Vec<(u32, HashMap<String, zvariant::OwnedValue>)>>,
+    screencast: Option<screencast::ScreenCast>,
+    session_handle: zbus::zvariant::OwnedObjectPath,
+    proxy: RemoteDesktopProxyBlocking<'static>,
+}
+
 impl RemoteDesktop {
     pub fn builder() -> RemoteDesktopBuilder {
         RemoteDesktopBuilder::new()
+    }
+
+    pub fn streams(&self) -> Option<&Vec<(u32, HashMap<String, zvariant::OwnedValue>)>> {
+        self.streams.as_ref()
+    }
+
+    pub fn notify_keyboard_keycode(&self, key: Keycode, state: KeyDirection) -> anyhow::Result<()> {
+        let raw_state = match state {
+            KeyDirection::Down => 1,
+            _ => 0,
+        };
+
+        self.proxy.notify_keyboard_keycode(
+            &self.session_handle,
+            HashMap::new(),
+            key.raw() as i32 - 8,
+            raw_state,
+        )?;
+
+        Ok(())
+    }
+
+    pub fn notify_pointer_button(
+        &self,
+        button: i32,
+        state: wl_pointer::ButtonState,
+    ) -> anyhow::Result<()> {
+        self.proxy.notify_pointer_button(
+            &self.session_handle,
+            HashMap::new(),
+            button,
+            u32::from(state != wl_pointer::ButtonState::Released),
+        )?;
+
+        Ok(())
+    }
+
+    pub fn notify_pointer_axis(&self, xpos: f32, ypos: f32) -> anyhow::Result<()> {
+        self.proxy
+            .notify_pointer_axis(&self.session_handle, HashMap::new(), xpos, ypos)?;
+
+        Ok(())
+    }
+
+    pub fn notify_pointer_motion(&self, xpos: f32, ypos: f32) -> anyhow::Result<()> {
+        self.proxy
+            .notify_pointer_motion(&self.session_handle, HashMap::new(), xpos, ypos)?;
+
+        Ok(())
+    }
+
+    pub fn notify_pointer_motion_absolute(
+        &self,
+        xpos: f32,
+        ypos: f32,
+        node_id: u32,
+    ) -> anyhow::Result<()> {
+        self.proxy.notify_pointer_motion_absolute(
+            &self.session_handle,
+            HashMap::new(),
+            node_id,
+            xpos,
+            ypos,
+        )?;
+
+        Ok(())
+    }
+
+    pub fn open_pipewire_remote(&self) -> anyhow::Result<OwnedFd> {
+        self.screencast
+            .as_ref()
+            .map(|screencast| screencast.open_pipewire_remote())
+            .context("")
+            .flatten()
     }
 }
 
