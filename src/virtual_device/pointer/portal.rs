@@ -1,8 +1,8 @@
 use super::traits::VirtualPointer;
 use crate::portal::remote_desktop::RemoteDesktop;
 use anyhow::Context;
-use pipewire::{self as pw, stream::StreamState};
-use pw::{properties::properties, spa};
+use pipewire as pw;
+use pw::{context, main_loop, properties::properties, spa, stream::StreamState};
 use std::process;
 use wayland_client::protocol::wl_pointer;
 
@@ -24,9 +24,9 @@ impl PortalPointer {
             .context("Failed to open PipeWire remote")?;
 
         let mainloop =
-            pw::main_loop::MainLoopRc::new(None).context("Failed to create PipeWire main loop")?;
+            main_loop::MainLoopRc::new(None).context("Failed to create PipeWire main loop")?;
 
-        let context = pw::context::ContextRc::new(&mainloop, None)
+        let context = context::ContextRc::new(&mainloop, None)
             .context("Failed to create PipeWire context")?;
 
         let core = context

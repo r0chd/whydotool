@@ -29,7 +29,8 @@ impl WaylandKeyboard {
                 1..=1,
                 (),
             )
-            .map(|virtual_keyboard| virtual_keyboard.create_virtual_keyboard(seat, qh, ()))?;
+            .map(|virtual_keyboard| virtual_keyboard.create_virtual_keyboard(seat, qh, ()))
+            .map_err(|_| anyhow::anyhow!("Compositor does not support Virtual Keyboard protocol, compile whydotool with `portals` feature"))?;
 
         let (xkb_state, file, size) = xkb_init();
 

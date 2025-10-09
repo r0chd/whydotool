@@ -28,7 +28,8 @@ impl WaylandPointer {
             )
             .map(|virtual_pointer_manager| {
                 virtual_pointer_manager.create_virtual_pointer(seat, qh, ())
-            })?;
+            })
+            .map_err(|_| anyhow::anyhow!("Compositor does not support Virtual Pointer protocol, compile whydotool with `portals` feature"))?;
 
         Ok(Self {
             virtual_pointer,
