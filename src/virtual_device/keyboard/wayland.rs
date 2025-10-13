@@ -48,7 +48,7 @@ impl VirtualKeyboard for WaylandKeyboard {
         &mut self.xkb_state
     }
 
-    fn key(&mut self, key: Keycode, state: KeyDirection) {
+    fn key(&mut self, key: Keycode, state: KeyDirection) -> anyhow::Result<()> {
         let raw_state = match state {
             KeyDirection::Down => 1,
             _ => 0,
@@ -64,5 +64,7 @@ impl VirtualKeyboard for WaylandKeyboard {
         self.virtual_keyboard.key(0, key.raw() - 8, raw_state);
         self.virtual_keyboard
             .modifiers(depressed, latched, locked, group);
+
+        Ok(())
     }
 }

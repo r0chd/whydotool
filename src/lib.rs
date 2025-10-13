@@ -7,16 +7,13 @@ mod virtual_device;
 use portal::remote_desktop::RemoteDesktop;
 use std::fmt;
 #[cfg(feature = "portals")]
-use virtual_device::keyboard::portal::PortalKeyboard;
-#[cfg(feature = "portals")]
-use virtual_device::pointer::portal::PortalPointer;
+use virtual_device::{keyboard::portal::PortalKeyboard, pointer::portal::PortalPointer};
 use virtual_device::{
     keyboard::{traits::VirtualKeyboard, wayland::WaylandKeyboard},
     pointer::{traits::VirtualPointer, wayland::WaylandPointer},
 };
-use wayland_client::EventQueue;
 use wayland_client::{
-    Connection, Dispatch, QueueHandle, delegate_dispatch, delegate_noop,
+    Connection, EventQueue, QueueHandle, delegate_dispatch, delegate_noop,
     globals::{GlobalList, GlobalListContents, registry_queue_init},
     protocol::{wl_registry, wl_seat},
 };
@@ -137,12 +134,7 @@ impl Whydotool {
                 return Ok(Box::new(ptr));
             }
 
-            let remote_desktop = RemoteDesktop::builder()
-                .pointer(true)
-                .screencast(true)
-                .try_build()?;
-
-            let portal_ptr = PortalPointer::new(remote_desktop);
+            let portal_ptr = PortalPointer::new();
             Ok(Box::new(portal_ptr))
         }
         #[cfg(not(feature = "portals"))]
@@ -156,18 +148,7 @@ impl Whydotool {
     }
 }
 
-impl Dispatch<wl_seat::WlSeat, ()> for Whydotool {
-    fn event(
-        _: &mut Self,
-        _: &wl_seat::WlSeat,
-        _: <wl_seat::WlSeat as wayland_client::Proxy>::Event,
-        _: &(),
-        _: &Connection,
-        _: &QueueHandle<Self>,
-    ) {
-    }
-}
-
+delegate_noop!(Whydotool: ignore wl_seat::WlSeat);
 delegate_dispatch!(Whydotool: [wl_registry::WlRegistry: GlobalListContents] => Whydotool);
 delegate_noop!(Whydotool: zwlr_virtual_pointer_manager_v1::ZwlrVirtualPointerManagerV1);
 delegate_noop!(Whydotool: zwlr_virtual_pointer_v1::ZwlrVirtualPointerV1);

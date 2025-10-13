@@ -41,11 +41,11 @@ fn main() -> anyhow::Result<()> {
                     let up = btn & 0x80 != 0;
 
                     if down {
-                        virtual_pointer.button(keycode, ButtonState::Pressed);
+                        virtual_pointer.button(keycode, ButtonState::Pressed)?;
                     }
 
                     if up {
-                        virtual_pointer.button(keycode, ButtonState::Released);
+                        virtual_pointer.button(keycode, ButtonState::Released)?;
                     }
 
                     event_queue.roundtrip(&mut whydotool)?;
@@ -68,11 +68,11 @@ fn main() -> anyhow::Result<()> {
             let virtual_pointer = whydotool.virtual_pointer()?;
 
             if wheel {
-                virtual_pointer.scroll(xpos, ypos);
+                virtual_pointer.scroll(xpos, ypos)?;
             } else if absolute {
-                virtual_pointer.motion_absolute(xpos as u32, ypos as u32);
+                virtual_pointer.motion_absolute(xpos as u32, ypos as u32)?;
             } else {
-                virtual_pointer.motion(xpos, ypos);
+                virtual_pointer.motion(xpos, ypos)?;
             }
 
             event_queue.roundtrip(&mut whydotool)?;
@@ -88,7 +88,7 @@ fn main() -> anyhow::Result<()> {
 
                 // xkbcommon uses keycodes with an offset of 8
                 let keycode = xkb::Keycode::new(key_press.keycode + 8);
-                virtual_keyboard.key(keycode, key_press.pressed);
+                virtual_keyboard.key(keycode, key_press.pressed)?;
 
                 if let Some(key_delay) = key_delay {
                     std::thread::sleep(Duration::from_millis(key_delay));
@@ -125,17 +125,17 @@ fn main() -> anyhow::Result<()> {
                         if needs_shift {
                             // xkbcommon uses keycodes with an offset of 8
                             let keycode = xkb::Keycode::new(42 + 8);
-                            virtual_keyboard.key(keycode, xkb::KeyDirection::Down); // Shift down
+                            virtual_keyboard.key(keycode, xkb::KeyDirection::Down)?; // Shift down
                         }
 
-                        virtual_keyboard.key(keycode, xkb::KeyDirection::Down);
+                        virtual_keyboard.key(keycode, xkb::KeyDirection::Down)?;
                         std::thread::sleep(Duration::from_millis(key_hold));
-                        virtual_keyboard.key(keycode, xkb::KeyDirection::Up);
+                        virtual_keyboard.key(keycode, xkb::KeyDirection::Up)?;
 
                         if needs_shift {
                             // xkbcommon uses keycodes with an offset of 8
                             let keycode = xkb::Keycode::new(42 + 8);
-                            virtual_keyboard.key(keycode, xkb::KeyDirection::Up); // Shift up
+                            virtual_keyboard.key(keycode, xkb::KeyDirection::Up)?; // Shift up
                         }
 
                         event_queue.roundtrip(&mut whydotool)?;
@@ -192,7 +192,7 @@ fn main() -> anyhow::Result<()> {
                 if is_uppercase {
                     // xkbcommon uses keycodes with an offset of 8
                     let keycode = xkb::Keycode::new(42 + 8);
-                    virtual_keyboard.key(keycode, xkb::KeyDirection::Down); // Shift down
+                    virtual_keyboard.key(keycode, xkb::KeyDirection::Down)?; // Shift down
                 }
 
                 {
@@ -202,13 +202,13 @@ fn main() -> anyhow::Result<()> {
                     }
                 }
 
-                virtual_keyboard.key(keycode, xkb::KeyDirection::Down);
-                virtual_keyboard.key(keycode, xkb::KeyDirection::Up);
+                virtual_keyboard.key(keycode, xkb::KeyDirection::Down)?;
+                virtual_keyboard.key(keycode, xkb::KeyDirection::Up)?;
 
                 if is_uppercase {
                     // xkbcommon uses keycodes with an offset of 8
                     let keycode = xkb::Keycode::new(42 + 8);
-                    virtual_keyboard.key(keycode, xkb::KeyDirection::Up); // Shift up
+                    virtual_keyboard.key(keycode, xkb::KeyDirection::Up)?; // Shift up
                 }
             }
         }

@@ -43,30 +43,38 @@ impl WaylandPointer {
 }
 
 impl VirtualPointer for WaylandPointer {
-    fn button(&self, button: u32, state: wl_pointer::ButtonState) {
+    fn button(&self, button: u32, state: wl_pointer::ButtonState) -> anyhow::Result<()> {
         self.virtual_pointer.button(0, button, state);
         self.virtual_pointer.frame();
+
+        Ok(())
     }
 
-    fn scroll(&self, xpos: f64, ypos: f64) {
+    fn scroll(&self, xpos: f64, ypos: f64) -> anyhow::Result<()> {
         self.virtual_pointer
             .axis(0, wl_pointer::Axis::VerticalScroll, ypos);
         self.virtual_pointer
             .axis(0, wl_pointer::Axis::HorizontalScroll, xpos);
         self.virtual_pointer.frame();
+
+        Ok(())
     }
 
-    fn motion(&self, xpos: f64, ypos: f64) {
+    fn motion(&self, xpos: f64, ypos: f64) -> anyhow::Result<()> {
         self.virtual_pointer.motion(0, xpos, ypos);
         self.virtual_pointer.frame();
+
+        Ok(())
     }
 
-    fn motion_absolute(&self, xpos: u32, ypos: u32) {
+    fn motion_absolute(&self, xpos: u32, ypos: u32) -> anyhow::Result<()> {
         let (width, height) = self.outputs.dimensions();
 
         self.virtual_pointer
             .motion_absolute(0, xpos, ypos, width as u32, height as u32);
         self.virtual_pointer.frame();
+
+        Ok(())
     }
 
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any {

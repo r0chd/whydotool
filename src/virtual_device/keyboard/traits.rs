@@ -35,5 +35,5 @@ pub trait VirtualKeyboard {
             .mod_index_is_active(ctrl_mod_index, xkb::STATE_MODS_DEPRESSED)
     }
 
-    fn key(&mut self, key: Keycode, state: KeyDirection);
+    fn key(&mut self, key: Keycode, state: KeyDirection) -> anyhow::Result<()>;
 }
