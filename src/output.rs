@@ -1,4 +1,4 @@
-use crate::{Whydotool, virtual_device::pointer::wayland::WaylandPointer};
+use crate::Whydotool;
 use wayland_client::{
     Connection, Dispatch, Proxy, QueueHandle, globals::GlobalList, protocol::wl_output,
 };
@@ -67,18 +67,8 @@ impl Dispatch<wl_output::WlOutput, ()> for Whydotool {
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
-        let Ok(mut virtual_pointer) = state.virtual_pointer() else {
-            return;
-        };
-        let Some(wayland_pointer) = virtual_pointer
-            .as_any_mut()
-            .downcast_mut::<WaylandPointer>()
-        else {
-            return;
-        };
-
-        if let Some(output) = wayland_pointer
-            .outputs()
+        if let Some(output) = state
+            .outputs
             .iter_mut()
             .find(|output| output.wl_output == *wl_output)
         {

@@ -90,9 +90,9 @@ fn main() -> anyhow::Result<()> {
                 let keycode = xkb::Keycode::new(key_press.keycode + 8);
                 virtual_keyboard.key(keycode, key_press.pressed);
 
-                if let Some(key_delay) = key_delay {
-                    std::thread::sleep(Duration::from_millis(key_delay));
-                }
+                std::thread::sleep(Duration::from_millis(
+                    key_delay.map_or(whydotool.key_delay as u64, |delay| delay),
+                ));
             }
         }
         Commands::Type {
@@ -129,7 +129,9 @@ fn main() -> anyhow::Result<()> {
                         }
 
                         virtual_keyboard.key(keycode, xkb::KeyDirection::Down);
-                        std::thread::sleep(Duration::from_millis(key_hold));
+                        std::thread::sleep(Duration::from_millis(
+                            key_hold.map_or(whydotool.key_delay as u64, |delay| delay),
+                        ));
                         virtual_keyboard.key(keycode, xkb::KeyDirection::Up);
 
                         if needs_shift {
@@ -140,13 +142,15 @@ fn main() -> anyhow::Result<()> {
 
                         event_queue.roundtrip(&mut whydotool)?;
 
-                        std::thread::sleep(Duration::from_millis(key_delay));
+                        std::thread::sleep(Duration::from_millis(
+                            key_delay.map_or(whydotool.key_delay as u64, |delay| delay),
+                        ));
                     }
                 }
 
-                if let Some(next_delay) = next_delay {
-                    std::thread::sleep(Duration::from_millis(next_delay));
-                }
+                std::thread::sleep(Duration::from_millis(
+                    next_delay.map_or(whydotool.key_delay as u64, |delay| delay),
+                ));
             }
         }
         Commands::Stdin => {

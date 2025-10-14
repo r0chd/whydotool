@@ -55,12 +55,12 @@ pub enum Commands {
     },
     Type {
         /// Delay N ms between key down/up
-        #[arg(short = 'd', long = "key-delay", default_value_t = 20)]
-        key_delay: u64,
+        #[arg(short = 'd', long = "key-delay")]
+        key_delay: Option<u64>,
 
         /// Hold each key for N ms
-        #[arg(short = 'H', long = "key-hold", default_value_t = 20)]
-        key_hold: u64,
+        #[arg(short = 'H', long = "key-hold")]
+        key_hold: Option<u64>,
 
         /// Delay N ms between command line strings
         #[arg(short = 'D', long = "next-delay")]

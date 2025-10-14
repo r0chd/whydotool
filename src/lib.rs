@@ -3,6 +3,7 @@ mod output;
 mod portal;
 mod virtual_device;
 
+use output::Outputs;
 #[cfg(feature = "portals")]
 use portal::remote_desktop::RemoteDesktop;
 use std::fmt;
@@ -12,11 +13,10 @@ use virtual_device::{
     keyboard::{traits::VirtualKeyboard, wayland::WaylandKeyboard},
     pointer::{traits::VirtualPointer, wayland::WaylandPointer},
 };
-use wayland_client::EventQueue;
 use wayland_client::{
-    Connection, Dispatch, QueueHandle, delegate_dispatch, delegate_noop,
+    Connection, Dispatch, EventQueue, QueueHandle, delegate_dispatch, delegate_noop,
     globals::{GlobalList, GlobalListContents, registry_queue_init},
-    protocol::{wl_registry, wl_seat},
+    protocol::{wl_keyboard, wl_registry, wl_seat},
 };
 use wayland_protocols_wlr::virtual_pointer::v1::client::{
     zwlr_virtual_pointer_manager_v1, zwlr_virtual_pointer_v1,
@@ -54,6 +54,8 @@ pub struct Whydotool {
     globals: GlobalList,
     qh: QueueHandle<Self>,
     seat: Option<wl_seat::WlSeat>,
+    outputs: Outputs,
+    pub key_delay: i32,
 }
 
 impl Whydotool {
@@ -68,6 +70,8 @@ impl Whydotool {
         Ok((
             event_queue,
             Self {
+                key_delay: 0,
+                outputs: Outputs::new(&globals, &qh),
                 force_portal: false,
                 globals,
                 qh,
@@ -87,6 +91,8 @@ impl Whydotool {
         Ok((
             event_queue,
             Self {
+                key_delay: 0,
+                outputs: Outputs::new(&globals, &qh),
                 force_portal: false,
                 globals,
                 qh,
@@ -117,6 +123,8 @@ impl Whydotool {
             let Some(seat) = self.seat.as_ref() else {
                 anyhow::bail!("No seat provided for Wayland keyboard")
             };
+
+            let _wl_keyboard = seat.get_keyboard(&self.qh, ());
             Ok(Box::new(WaylandKeyboard::try_new(
                 &self.globals,
                 &self.qh,
@@ -129,8 +137,12 @@ impl Whydotool {
         #[cfg(feature = "portals")]
         {
             if !self.force_portal
-                && let Ok(ptr) =
-                    WaylandPointer::try_new(&self.globals, &self.qh, self.seat.as_ref())
+                && let Ok(ptr) = WaylandPointer::try_new(
+                    &self.globals,
+                    &self.qh,
+                    self.seat.as_ref(),
+                    self.outputs.clone(),
+                )
             {
                 return Ok(Box::new(ptr));
             }
@@ -149,23 +161,28 @@ impl Whydotool {
                 &self.globals,
                 &self.qh,
                 self.seat.as_ref(),
+                self.outputs.clone(),
             )?))
         }
     }
 }
 
-impl Dispatch<wl_seat::WlSeat, ()> for Whydotool {
+impl Dispatch<wl_keyboard::WlKeyboard, ()> for Whydotool {
     fn event(
-        _: &mut Self,
-        _: &wl_seat::WlSeat,
-        _: <wl_seat::WlSeat as wayland_client::Proxy>::Event,
+        state: &mut Self,
+        _: &wl_keyboard::WlKeyboard,
+        event: <wl_keyboard::WlKeyboard as wayland_client::Proxy>::Event,
         _: &(),
-        _: &Connection,
+        _: &wayland_client::Connection,
         _: &QueueHandle<Self>,
     ) {
+        if let wl_keyboard::Event::RepeatInfo { rate, delay: _ } = event {
+            state.key_delay = ((1.0 / rate as f32) * 1000.) as i32;
+        }
     }
 }
 
+delegate_noop!(Whydotool: ignore wl_seat::WlSeat);
 delegate_dispatch!(Whydotool: [wl_registry::WlRegistry: GlobalListContents] => Whydotool);
 delegate_noop!(Whydotool: zwlr_virtual_pointer_manager_v1::ZwlrVirtualPointerManagerV1);
 delegate_noop!(Whydotool: zwlr_virtual_pointer_v1::ZwlrVirtualPointerV1);
