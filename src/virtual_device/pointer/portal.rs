@@ -6,23 +6,20 @@ use pw::{context, main_loop, properties::properties, spa, stream::StreamState};
 use std::process;
 use wayland_client::protocol::wl_pointer;
 
-pub struct PortalPointer {}
+pub struct PortalPointer {
+    remote_desktop: RemoteDesktop,
+}
 
 impl PortalPointer {
-    pub fn new() -> Self {
-        Self {}
+    pub fn new(remote_desktop: RemoteDesktop) -> Self {
+        Self { remote_desktop }
     }
 
-    fn motion_absolute_impl(
-        &self,
-        xpos: u32,
-        ypos: u32,
-        remote_desktop: RemoteDesktop,
-        node_id: u32,
-    ) -> anyhow::Result<()> {
+    fn motion_absolute_impl(&self, xpos: u32, ypos: u32, node_id: u32) -> anyhow::Result<()> {
         pw::init();
 
-        let pw_fd = remote_desktop
+        let pw_fd = self
+            .remote_desktop
             .open_pipewire_remote()
             .context("Failed to open PipeWire remote")?;
 
@@ -66,7 +63,7 @@ impl PortalPointer {
             )
             .context("Failed to connect PipeWire stream")?;
 
-        remote_desktop
+        self.remote_desktop
             .notify_pointer_motion_absolute(xpos as f32, ypos as f32, node_id)
             .context("Failed to notify pointer motion absolute")?;
 
@@ -76,42 +73,32 @@ impl PortalPointer {
 }
 
 impl VirtualPointer for PortalPointer {
-    fn button(&self, button: u32, state: wl_pointer::ButtonState) -> anyhow::Result<()> {
-        let remote_desktop = RemoteDesktop::builder().pointer(true).try_build()?;
-
-        remote_desktop.notify_pointer_button(button as i32, state)?;
-
-        Ok(())
+    fn button(&self, button: u32, state: wl_pointer::ButtonState) {
+        self.remote_desktop
+            .notify_pointer_button(button as i32, state)
+            .unwrap();
     }
 
-    fn scroll(&self, xpos: f64, ypos: f64) -> anyhow::Result<()> {
-        let remote_desktop = RemoteDesktop::builder().pointer(true).try_build()?;
-
-        remote_desktop.notify_pointer_axis(xpos as f32, ypos as f32)?;
-
-        Ok(())
+    fn scroll(&self, xpos: f64, ypos: f64) {
+        self.remote_desktop
+            .notify_pointer_axis(xpos as f32, ypos as f32)
+            .unwrap();
     }
 
-    fn motion(&self, xpos: f64, ypos: f64) -> anyhow::Result<()> {
-        let remote_desktop = RemoteDesktop::builder().pointer(true).try_build()?;
-
-        remote_desktop.notify_pointer_motion(xpos as f32, ypos as f32)?;
-
-        Ok(())
+    fn motion(&self, xpos: f64, ypos: f64) {
+        self.remote_desktop
+            .notify_pointer_motion(xpos as f32, ypos as f32)
+            .unwrap();
     }
 
-    fn motion_absolute(&self, xpos: u32, ypos: u32) -> anyhow::Result<()> {
-        let remote_desktop = RemoteDesktop::builder()
-            .pointer(true)
-            .screencast(true)
-            .try_build()?;
-
-        if let Some(node_id) = remote_desktop
+    fn motion_absolute(&self, xpos: u32, ypos: u32) {
+        if let Some(node_id) = self
+            .remote_desktop
             .streams()
             .as_ref()
             .and_then(|streams| streams.first().map(|stream| stream.0))
         {
-            if let Err(e) = self.motion_absolute_impl(xpos, ypos, remote_desktop, node_id) {
+            if let Err(e) = self.motion_absolute_impl(xpos, ypos, node_id) {
                 eprintln!("motion_absolute failed: {e:#}");
                 process::exit(1);
             }
@@ -119,8 +106,6 @@ impl VirtualPointer for PortalPointer {
             eprintln!("No PipeWire node found for pointer motion_absolute");
             process::exit(1);
         }
-
-        Ok(())
     }
 
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any {

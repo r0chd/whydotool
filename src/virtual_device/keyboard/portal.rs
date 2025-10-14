@@ -23,7 +23,7 @@ impl VirtualKeyboard for PortalKeyboard {
         &mut self.xkb_state
     }
 
-    fn key(&mut self, key: Keycode, state: KeyDirection) -> anyhow::Result<()> {
+    fn key(&mut self, key: Keycode, state: KeyDirection) {
         // xkbcommon doesn't implement Copy for KeyDirection
         let state_2 = match state {
             KeyDirection::Down => KeyDirection::Down,
@@ -34,6 +34,6 @@ impl VirtualKeyboard for PortalKeyboard {
 
         self.remote_desktop
             .notify_keyboard_keycode(key, state_2)
-            .map_err(|e| anyhow::anyhow!("{e}"))
+            .unwrap();
     }
 }
