@@ -1,16 +1,16 @@
 use super::traits::VirtualKeyboard;
-use crate::{Whydotool, virtual_device::keyboard::util::xkb_init};
+use crate::{Whydotool, KeymapInfo};
 use std::os::fd::AsFd;
 use wayland_client::{
     QueueHandle,
     globals::GlobalList,
-    protocol::{wl_keyboard, wl_seat},
+    protocol::wl_seat,
 };
 use wayland_protocols_misc::zwp_virtual_keyboard_v1::client::{
     zwp_virtual_keyboard_manager_v1, zwp_virtual_keyboard_v1,
 };
 use xkbcommon::xkb::Keycode;
-use xkbcommon::xkb::{self, KeyDirection};
+use xkbcommon::xkb::{self, KeyDirection, KEYMAP_COMPILE_NO_FLAGS};
 
 pub struct WaylandKeyboard {
     virtual_keyboard: zwp_virtual_keyboard_v1::ZwpVirtualKeyboardV1,
@@ -22,6 +22,7 @@ impl WaylandKeyboard {
         globals: &GlobalList,
         qh: &QueueHandle<Whydotool>,
         seat: &wl_seat::WlSeat,
+        keymap_info: &KeymapInfo,
     ) -> anyhow::Result<Self> {
         let virtual_keyboard = globals
             .bind::<zwp_virtual_keyboard_manager_v1::ZwpVirtualKeyboardManagerV1, _, _>(
@@ -32,9 +33,20 @@ impl WaylandKeyboard {
             .map(|virtual_keyboard| virtual_keyboard.create_virtual_keyboard(seat, qh, ()))
             .map_err(|_| anyhow::anyhow!("Compositor does not support Virtual Keyboard protocol, compile whydotool with `portals` feature"))?;
 
-        let (xkb_state, file, size) = xkb_init();
+        // Create xkb_state from the keymap fd
+        let xkb_context = xkb::Context::new(xkb::CONTEXT_NO_FLAGS);
+        let xkb_keymap = unsafe {
+            xkb::Keymap::new_from_fd(
+                &xkb_context,
+                keymap_info.fd.try_clone().unwrap(),
+                keymap_info.size as usize,
+                keymap_info.format.into(),
+                KEYMAP_COMPILE_NO_FLAGS,
+            )?
+        };
+        let xkb_state = xkb::State::new(xkb_keymap.as_ref().unwrap());
 
-        virtual_keyboard.keymap(wl_keyboard::KeymapFormat::XkbV1.into(), file.as_fd(), size);
+        virtual_keyboard.keymap(keymap_info.format.into(), keymap_info.fd.as_fd(), keymap_info.size);
 
         Ok(Self {
             virtual_keyboard,

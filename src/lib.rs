@@ -7,6 +7,7 @@ use output::Outputs;
 #[cfg(feature = "portals")]
 use portal::remote_desktop::RemoteDesktop;
 use std::fmt;
+use std::sync::{Arc, Mutex};
 #[cfg(feature = "portals")]
 use virtual_device::{keyboard::portal::PortalKeyboard, pointer::portal::PortalPointer};
 use virtual_device::{
@@ -22,6 +23,12 @@ use wayland_protocols_wlr::virtual_pointer::v1::client::{
     zwlr_virtual_pointer_manager_v1, zwlr_virtual_pointer_v1,
 };
 use xkbcommon::xkb::KeyDirection;
+
+pub struct KeymapInfo {
+    pub format: wl_keyboard::KeymapFormat,
+    pub fd: std::os::fd::OwnedFd,
+    pub size: u32,
+}
 
 pub struct KeyPress {
     pub keycode: u32,
@@ -56,6 +63,8 @@ pub struct Whydotool {
     seat: Option<wl_seat::WlSeat>,
     outputs: Outputs,
     pub key_delay: i32,
+    keymap_info: Arc<Mutex<Option<KeymapInfo>>>,
+    _wl_keyboard: Option<wl_keyboard::WlKeyboard>,
 }
 
 impl Whydotool {
@@ -66,6 +75,7 @@ impl Whydotool {
         let qh = event_queue.handle();
 
         let seat = globals.bind::<wl_seat::WlSeat, _, _>(&qh, 1..=4, ()).ok();
+        let wl_keyboard = seat.as_ref().map(|seat| seat.get_keyboard(&qh, ()));
 
         Ok((
             event_queue,
@@ -76,6 +86,8 @@ impl Whydotool {
                 globals,
                 qh,
                 seat,
+                keymap_info: Arc::new(Mutex::new(None)),
+                _wl_keyboard: wl_keyboard,
             },
         ))
     }
@@ -87,6 +99,7 @@ impl Whydotool {
         let qh = event_queue.handle();
 
         let seat = globals.bind::<wl_seat::WlSeat, _, _>(&qh, 1..=4, ()).ok();
+        let wl_keyboard = seat.as_ref().map(|seat| seat.get_keyboard(&qh, ()));
 
         Ok((
             event_queue,
@@ -97,6 +110,8 @@ impl Whydotool {
                 globals,
                 qh,
                 seat,
+                keymap_info: Arc::new(Mutex::new(None)),
+                _wl_keyboard: wl_keyboard,
             },
         ))
     }
@@ -110,9 +125,15 @@ impl Whydotool {
         {
             if !self.force_portal
                 && let Some(seat) = self.seat.as_ref()
-                && let Ok(ptr) = WaylandKeyboard::try_new(&self.globals, &self.qh, seat)
             {
-                return Ok(Box::new(ptr));
+                let keymap_guard = self.keymap_info.lock().unwrap();
+                if let Some(keymap_info) = keymap_guard.as_ref() {
+                    if let Ok(ptr) =
+                        WaylandKeyboard::try_new(&self.globals, &self.qh, seat, keymap_info)
+                    {
+                        return Ok(Box::new(ptr));
+                    }
+                }
             }
 
             let remote_desktop = RemoteDesktop::builder().keyboard(true).try_build()?;
@@ -124,11 +145,17 @@ impl Whydotool {
                 anyhow::bail!("No seat provided for Wayland keyboard")
             };
 
-            let _wl_keyboard = seat.get_keyboard(&self.qh, ());
+            let keymap_guard = self.keymap_info.lock().unwrap();
+            let Some(keymap_info) = keymap_guard.as_ref() else {
+                anyhow::bail!(
+                    "No keymap information available. Make sure a keyboard is connected and the keymap event has been received."
+                )
+            };
             Ok(Box::new(WaylandKeyboard::try_new(
                 &self.globals,
                 &self.qh,
                 seat,
+                keymap_info,
             )?))
         }
     }
@@ -176,8 +203,21 @@ impl Dispatch<wl_keyboard::WlKeyboard, ()> for Whydotool {
         _: &wayland_client::Connection,
         _: &QueueHandle<Self>,
     ) {
-        if let wl_keyboard::Event::RepeatInfo { rate, delay: _ } = event {
-            state.key_delay = ((1.0 / rate as f32) * 1000.) as i32;
+        match event {
+            wl_keyboard::Event::Keymap { format, fd, size } => {
+                let keymap_info = KeymapInfo {
+                    format: format.into_result().unwrap(),
+                    fd: fd.into(),
+                    size,
+                };
+                if let Ok(mut keymap_guard) = state.keymap_info.lock() {
+                    *keymap_guard = Some(keymap_info);
+                }
+            }
+            wl_keyboard::Event::RepeatInfo { rate, delay: _ } => {
+                state.key_delay = ((1.0 / rate as f32) * 1000.) as i32;
+            }
+            _ => {}
         }
     }
 }
