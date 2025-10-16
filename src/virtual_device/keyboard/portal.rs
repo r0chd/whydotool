@@ -1,5 +1,5 @@
 use super::traits::VirtualKeyboard;
-use crate::portal::remote_desktop::RemoteDesktop;
+use crate::{KeymapInfo, portal::remote_desktop::RemoteDesktop};
 use xkbcommon::xkb::{self, KEYMAP_COMPILE_NO_FLAGS, KeyDirection, Keycode};
 
 pub struct PortalKeyboard {
@@ -8,25 +8,26 @@ pub struct PortalKeyboard {
 }
 
 impl PortalKeyboard {
-    pub fn new(remote_desktop: RemoteDesktop) -> Self {
-        // Create a default US keymap for portal implementation
+    pub fn try_new(
+        remote_desktop: RemoteDesktop,
+        keymap_info: &KeymapInfo,
+    ) -> anyhow::Result<Self> {
         let xkb_context = xkb::Context::new(xkb::CONTEXT_NO_FLAGS);
-        let xkb_keymap = xkb::Keymap::new_from_names(
-            &xkb_context,
-            "",
-            "",
-            "us",
-            "",
-            None,
-            KEYMAP_COMPILE_NO_FLAGS,
-        )
-        .expect("Failed to create default keymap");
-        let xkb_state = xkb::State::new(&xkb_keymap);
+        let xkb_keymap = unsafe {
+            xkb::Keymap::new_from_fd(
+                &xkb_context,
+                keymap_info.fd.try_clone().unwrap(),
+                keymap_info.size as usize,
+                keymap_info.format.into(),
+                KEYMAP_COMPILE_NO_FLAGS,
+            )?
+        };
+        let xkb_state = xkb::State::new(xkb_keymap.as_ref().unwrap());
 
-        Self {
+        Ok(Self {
             xkb_state,
             remote_desktop,
-        }
+        })
     }
 }
 

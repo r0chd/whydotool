@@ -29,7 +29,6 @@ impl WaylandKeyboard {
             .map(|virtual_keyboard| virtual_keyboard.create_virtual_keyboard(seat, qh, ()))
             .map_err(|_| anyhow::anyhow!("Compositor does not support Virtual Keyboard protocol, compile whydotool with `portals` feature"))?;
 
-        // Create xkb_state from the keymap fd
         let xkb_context = xkb::Context::new(xkb::CONTEXT_NO_FLAGS);
         let xkb_keymap = unsafe {
             xkb::Keymap::new_from_fd(

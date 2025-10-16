@@ -154,24 +154,27 @@ impl Whydotool {
     /// Lack of virtual keyboard support in compositor
     /// Lack of `RemoteDesktop` interface support in xdg-desktop-portal
     pub fn virtual_keyboard(&self) -> anyhow::Result<Box<dyn VirtualKeyboard>> {
+        let keymap_guard = self
+            .state
+            .keymap_info
+            .lock()
+            .map_err(|e| anyhow::anyhow!("{e}"))?;
+        let Some(keymap_info) = keymap_guard.as_ref() else {
+            return Err(anyhow::anyhow!("something went horribly wrong"));
+        };
+
         if !self.force_portal
             && let Some(seat) = self.seat.as_ref()
+            && let Ok(ptr) = WaylandKeyboard::try_new(&self.globals, &self.qh, seat, keymap_info)
         {
-            let keymap_guard = self
-                .state
-                .keymap_info
-                .lock()
-                .map_err(|e| anyhow::anyhow!("{e}"))?;
-            if let Some(keymap_info) = keymap_guard.as_ref()
-                && let Ok(ptr) =
-                    WaylandKeyboard::try_new(&self.globals, &self.qh, seat, keymap_info)
-            {
-                return Ok(Box::new(ptr));
-            }
+            return Ok(Box::new(ptr));
         }
 
         let remote_desktop = RemoteDesktop::builder().keyboard(true).try_build()?;
-        Ok(Box::new(PortalKeyboard::new(remote_desktop)))
+        Ok(Box::new(PortalKeyboard::try_new(
+            remote_desktop,
+            keymap_info,
+        )?))
     }
 
     #[cfg(not(feature = "portals"))]
