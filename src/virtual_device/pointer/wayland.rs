@@ -1,5 +1,5 @@
 use super::traits::VirtualPointer;
-use crate::{Whydotool, output::Outputs};
+use crate::{State, output::Outputs};
 use wayland_client::{
     QueueHandle,
     globals::GlobalList,
@@ -17,7 +17,7 @@ pub struct WaylandPointer {
 impl WaylandPointer {
     pub fn try_new(
         globals: &GlobalList,
-        qh: &QueueHandle<Whydotool>,
+        qh: &QueueHandle<State>,
         seat: Option<&wl_seat::WlSeat>,
         outputs: Outputs,
     ) -> anyhow::Result<Self> {

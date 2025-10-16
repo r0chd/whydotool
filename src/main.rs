@@ -12,12 +12,9 @@ use xkbcommon::xkb;
 fn main() -> anyhow::Result<()> {
     let cli = Cli::try_parse()?;
 
-    let (mut event_queue, mut whydotool) = Whydotool::try_new()?;
+    let mut whydotool = Whydotool::try_new()?;
     #[cfg(feature = "portals")]
     whydotool.force_portal(cli.force_portal);
-
-    event_queue.dispatch_pending(&mut whydotool)?;
-    event_queue.roundtrip(&mut whydotool)?;
 
     match cli.cmd {
         Commands::Click {
@@ -48,7 +45,7 @@ fn main() -> anyhow::Result<()> {
                         virtual_pointer.button(keycode, ButtonState::Released);
                     }
 
-                    event_queue.roundtrip(&mut whydotool)?;
+                    whydotool.roundtrip()?;
 
                     if (btn & 0xC0) == 0
                         && let Some(delay) = next_delay
@@ -58,7 +55,6 @@ fn main() -> anyhow::Result<()> {
                 }
             }
         }
-
         Commands::Mousemove {
             wheel,
             absolute,
@@ -75,23 +71,23 @@ fn main() -> anyhow::Result<()> {
                 virtual_pointer.motion(xpos, ypos);
             }
 
-            event_queue.roundtrip(&mut whydotool)?;
+            whydotool.roundtrip()?;
         }
         Commands::Key {
             key_presses,
             key_delay,
         } => {
-            for key_press in key_presses {
-                event_queue.roundtrip(&mut whydotool)?;
+            let mut virtual_keyboard = whydotool.virtual_keyboard()?;
 
-                let mut virtual_keyboard = whydotool.virtual_keyboard()?;
+            for key_press in key_presses {
+                whydotool.roundtrip()?;
 
                 // xkbcommon uses keycodes with an offset of 8
                 let keycode = xkb::Keycode::new(key_press.keycode + 8);
                 virtual_keyboard.key(keycode, key_press.pressed);
 
                 std::thread::sleep(Duration::from_millis(
-                    key_delay.map_or(whydotool.key_delay as u64, |delay| delay),
+                    key_delay.map_or(whydotool.key_delay() as u64, |delay| delay),
                 ));
             }
         }
@@ -103,6 +99,8 @@ fn main() -> anyhow::Result<()> {
             file,
             ..
         } => {
+            let mut virtual_keyboard = whydotool.virtual_keyboard()?;
+
             let input = match file {
                 Some(file) if file.as_str() == "-" => {
                     let mut buffer = String::new();
@@ -117,8 +115,6 @@ fn main() -> anyhow::Result<()> {
                 None => strings,
             };
 
-            let mut virtual_keyboard = whydotool.virtual_keyboard()?;
-
             for string in input {
                 for ch in string.chars() {
                     if let Some((keycode, needs_shift)) = virtual_keyboard.keycode_from_char(ch) {
@@ -130,7 +126,7 @@ fn main() -> anyhow::Result<()> {
 
                         virtual_keyboard.key(keycode, xkb::KeyDirection::Down);
                         std::thread::sleep(Duration::from_millis(
-                            key_hold.map_or(whydotool.key_delay as u64, |delay| delay),
+                            key_hold.map_or(whydotool.key_delay() as u64, |delay| delay),
                         ));
                         virtual_keyboard.key(keycode, xkb::KeyDirection::Up);
 
@@ -140,21 +136,22 @@ fn main() -> anyhow::Result<()> {
                             virtual_keyboard.key(keycode, xkb::KeyDirection::Up); // Shift up
                         }
 
-                        event_queue.roundtrip(&mut whydotool)?;
+                        whydotool.roundtrip()?;
 
                         std::thread::sleep(Duration::from_millis(
-                            key_delay.map_or(whydotool.key_delay as u64, |delay| delay),
+                            key_delay.map_or(whydotool.key_delay() as u64, |delay| delay),
                         ));
                     }
                 }
 
                 std::thread::sleep(Duration::from_millis(
-                    next_delay.map_or(whydotool.key_delay as u64, |delay| delay),
+                    next_delay.map_or(whydotool.key_delay() as u64, |delay| delay),
                 ));
             }
         }
         Commands::Stdin => {
             let mut virtual_keyboard = whydotool.virtual_keyboard()?;
+
             let terminal = stdin::Terminal::configure()?;
             terminal.set_ctrlc_handler()?;
 

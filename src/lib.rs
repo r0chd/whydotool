@@ -56,14 +56,19 @@ impl Clone for KeyPress {
     }
 }
 
+struct State {
+    outputs: Outputs,
+    key_delay: i32,
+    keymap_info: Arc<Mutex<Option<KeymapInfo>>>,
+}
+
 pub struct Whydotool {
+    seat: Option<wl_seat::WlSeat>,
+    event_queue: EventQueue<State>,
+    state: State,
     force_portal: bool,
     globals: GlobalList,
-    qh: QueueHandle<Self>,
-    seat: Option<wl_seat::WlSeat>,
-    outputs: Outputs,
-    pub key_delay: i32,
-    keymap_info: Arc<Mutex<Option<KeymapInfo>>>,
+    qh: QueueHandle<State>,
     _wl_keyboard: Option<wl_keyboard::WlKeyboard>,
 }
 
@@ -72,51 +77,72 @@ impl Whydotool {
     /// # Errors
     ///
     /// Connection to wayland socket failed
-    pub fn try_new() -> anyhow::Result<(EventQueue<Self>, Self)> {
+    pub fn try_new() -> anyhow::Result<Self> {
         let conn = Connection::connect_to_env()?;
-        let (globals, event_queue) = registry_queue_init(&conn)?;
+        let (globals, mut event_queue) = registry_queue_init(&conn)?;
         let qh = event_queue.handle();
 
         let seat = globals.bind::<wl_seat::WlSeat, _, _>(&qh, 1..=4, ()).ok();
         let wl_keyboard = seat.as_ref().map(|seat| seat.get_keyboard(&qh, ()));
 
-        Ok((
+        let mut state = State {
+            key_delay: 0,
+            outputs: Outputs::new(&globals, &qh),
+            keymap_info: Arc::new(Mutex::new(None)),
+        };
+
+        event_queue.dispatch_pending(&mut state)?;
+        event_queue.roundtrip(&mut state)?;
+
+        Ok(Self {
+            seat,
+            state,
+            force_portal: false,
+            globals,
+            qh,
+            _wl_keyboard: wl_keyboard,
             event_queue,
-            Self {
-                key_delay: 0,
-                outputs: Outputs::new(&globals, &qh),
-                force_portal: false,
-                globals,
-                qh,
-                seat,
-                keymap_info: Arc::new(Mutex::new(None)),
-                _wl_keyboard: wl_keyboard,
-            },
-        ))
+        })
     }
 
     #[cfg(not(feature = "portals"))]
-    pub fn try_new() -> anyhow::Result<(EventQueue<Self>, Self)> {
+    pub fn try_new() -> anyhow::Result<Self> {
         let conn = Connection::connect_to_env()?;
-        let (globals, event_queue) = registry_queue_init(&conn)?;
+        let (globals, mut event_queue) = registry_queue_init(&conn)?;
         let qh = event_queue.handle();
 
         let seat = globals.bind::<wl_seat::WlSeat, _, _>(&qh, 1..=4, ()).ok();
         let wl_keyboard = seat.as_ref().map(|seat| seat.get_keyboard(&qh, ()));
 
-        Ok((
+        let mut state = State {
+            key_delay: 0,
+            outputs: Outputs::new(&globals, &qh),
+            keymap_info: Arc::new(Mutex::new(None)),
+        };
+
+        event_queue.dispatch_pending(&mut state)?;
+        event_queue.roundtrip(&mut state)?;
+
+        Ok(Self {
+            force_portal: false,
+            globals,
+            qh,
+            seat,
+            state,
+            _wl_keyboard: wl_keyboard,
             event_queue,
-            Self {
-                key_delay: 0,
-                outputs: Outputs::new(&globals, &qh),
-                force_portal: false,
-                globals,
-                qh,
-                seat,
-                keymap_info: Arc::new(Mutex::new(None)),
-                _wl_keyboard: wl_keyboard,
-            },
-        ))
+        })
+    }
+
+    #[must_use]
+    pub fn key_delay(&self) -> i32 {
+        self.state.key_delay
+    }
+
+    pub fn roundtrip(&mut self) -> anyhow::Result<usize> {
+        self.event_queue
+            .roundtrip(&mut self.state)
+            .map_err(|e| anyhow::anyhow!("{e}"))
     }
 
     pub fn force_portal(&mut self, force_portal: bool) {
@@ -132,6 +158,7 @@ impl Whydotool {
             && let Some(seat) = self.seat.as_ref()
         {
             let keymap_guard = self
+                .state
                 .keymap_info
                 .lock()
                 .map_err(|e| anyhow::anyhow!("{e}"))?;
@@ -153,11 +180,11 @@ impl Whydotool {
     /// No seat was found
     /// Keymap information was unavailable
     pub fn virtual_keyboard(&self) -> anyhow::Result<Box<dyn VirtualKeyboard>> {
-        let Some(seat) = self.seat.as_ref() else {
+        let Some(seat) = self.state.seat.as_ref() else {
             return Err(anyhow::anyhow!("No seat provided for Wayland keyboard"));
         };
 
-        let keymap_guard = self.keymap_info.lock().unwrap();
+        let keymap_guard = self.state.keymap_info.lock().unwrap();
         let Some(keymap_info) = keymap_guard.as_ref() else {
             return Err(anyhow::anyhow!(
                 "No keymap information available. Make sure a keyboard is connected and the keymap event has been received."
@@ -182,7 +209,7 @@ impl Whydotool {
                 &self.globals,
                 &self.qh,
                 self.seat.as_ref(),
-                self.outputs.clone(),
+                self.state.outputs.clone(),
             )
         {
             return Ok(Box::new(ptr));
@@ -206,12 +233,12 @@ impl Whydotool {
             &self.globals,
             &self.qh,
             self.seat.as_ref(),
-            self.outputs.clone(),
+            self.state.outputs.clone(),
         )?))
     }
 }
 
-impl Dispatch<wl_keyboard::WlKeyboard, ()> for Whydotool {
+impl Dispatch<wl_keyboard::WlKeyboard, ()> for State {
     fn event(
         state: &mut Self,
         _: &wl_keyboard::WlKeyboard,
@@ -239,7 +266,7 @@ impl Dispatch<wl_keyboard::WlKeyboard, ()> for Whydotool {
     }
 }
 
-delegate_noop!(Whydotool: ignore wl_seat::WlSeat);
-delegate_dispatch!(Whydotool: [wl_registry::WlRegistry: GlobalListContents] => Whydotool);
-delegate_noop!(Whydotool: zwlr_virtual_pointer_manager_v1::ZwlrVirtualPointerManagerV1);
-delegate_noop!(Whydotool: zwlr_virtual_pointer_v1::ZwlrVirtualPointerV1);
+delegate_noop!(State: ignore wl_seat::WlSeat);
+delegate_dispatch!(State: [wl_registry::WlRegistry: GlobalListContents] => State);
+delegate_noop!(State: zwlr_virtual_pointer_manager_v1::ZwlrVirtualPointerManagerV1);
+delegate_noop!(State: zwlr_virtual_pointer_v1::ZwlrVirtualPointerV1);

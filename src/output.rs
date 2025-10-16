@@ -1,4 +1,4 @@
-use crate::Whydotool;
+use crate::State;
 use wayland_client::{
     Connection, Dispatch, Proxy, QueueHandle, globals::GlobalList, protocol::wl_output,
 };
@@ -7,7 +7,7 @@ use wayland_client::{
 pub struct Outputs(Vec<Output>);
 
 impl Outputs {
-    pub fn new(globals: &GlobalList, qh: &QueueHandle<Whydotool>) -> Self {
+    pub fn new(globals: &GlobalList, qh: &QueueHandle<State>) -> Self {
         let mut outputs = Vec::new();
         globals.contents().with_list(|list| {
             list.iter()
@@ -58,7 +58,7 @@ impl Output {
     }
 }
 
-impl Dispatch<wl_output::WlOutput, ()> for Whydotool {
+impl Dispatch<wl_output::WlOutput, ()> for State {
     fn event(
         state: &mut Self,
         wl_output: &wl_output::WlOutput,

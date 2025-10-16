@@ -1,5 +1,5 @@
 use super::traits::VirtualKeyboard;
-use crate::{KeymapInfo, Whydotool};
+use crate::{KeymapInfo, State};
 use std::os::fd::AsFd;
 use wayland_client::{QueueHandle, globals::GlobalList, protocol::wl_seat};
 use wayland_protocols_misc::zwp_virtual_keyboard_v1::client::{
@@ -16,7 +16,7 @@ pub struct WaylandKeyboard {
 impl WaylandKeyboard {
     pub fn try_new(
         globals: &GlobalList,
-        qh: &QueueHandle<Whydotool>,
+        qh: &QueueHandle<State>,
         seat: &wl_seat::WlSeat,
         keymap_info: &KeymapInfo,
     ) -> anyhow::Result<Self> {
