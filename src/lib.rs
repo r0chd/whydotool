@@ -69,6 +69,9 @@ pub struct Whydotool {
 
 impl Whydotool {
     #[cfg(feature = "portals")]
+    /// # Errors
+    ///
+    /// Connection to wayland socket failed
     pub fn try_new() -> anyhow::Result<(EventQueue<Self>, Self)> {
         let conn = Connection::connect_to_env()?;
         let (globals, event_queue) = registry_queue_init(&conn)?;
@@ -120,77 +123,91 @@ impl Whydotool {
         self.force_portal = force_portal;
     }
 
+    #[cfg(feature = "portals")]
+    /// # Errors
+    /// Lack of virtual keyboard support in compositor
+    /// Lack of `RemoteDesktop` interface support in xdg-desktop-portal
     pub fn virtual_keyboard(&self) -> anyhow::Result<Box<dyn VirtualKeyboard>> {
-        #[cfg(feature = "portals")]
+        if !self.force_portal
+            && let Some(seat) = self.seat.as_ref()
         {
-            if !self.force_portal
-                && let Some(seat) = self.seat.as_ref()
-            {
-                let keymap_guard = self.keymap_info.lock().unwrap();
-                if let Some(keymap_info) = keymap_guard.as_ref() {
-                    if let Ok(ptr) =
-                        WaylandKeyboard::try_new(&self.globals, &self.qh, seat, keymap_info)
-                    {
-                        return Ok(Box::new(ptr));
-                    }
-                }
-            }
-
-            let remote_desktop = RemoteDesktop::builder().keyboard(true).try_build()?;
-            Ok(Box::new(PortalKeyboard::new(remote_desktop)))
-        }
-        #[cfg(not(feature = "portals"))]
-        {
-            let Some(seat) = self.seat.as_ref() else {
-                anyhow::bail!("No seat provided for Wayland keyboard")
-            };
-
-            let keymap_guard = self.keymap_info.lock().unwrap();
-            let Some(keymap_info) = keymap_guard.as_ref() else {
-                anyhow::bail!(
-                    "No keymap information available. Make sure a keyboard is connected and the keymap event has been received."
-                )
-            };
-            Ok(Box::new(WaylandKeyboard::try_new(
-                &self.globals,
-                &self.qh,
-                seat,
-                keymap_info,
-            )?))
-        }
-    }
-
-    pub fn virtual_pointer(&self) -> anyhow::Result<Box<dyn VirtualPointer>> {
-        #[cfg(feature = "portals")]
-        {
-            if !self.force_portal
-                && let Ok(ptr) = WaylandPointer::try_new(
-                    &self.globals,
-                    &self.qh,
-                    self.seat.as_ref(),
-                    self.outputs.clone(),
-                )
+            let keymap_guard = self
+                .keymap_info
+                .lock()
+                .map_err(|e| anyhow::anyhow!("{e}"))?;
+            if let Some(keymap_info) = keymap_guard.as_ref()
+                && let Ok(ptr) =
+                    WaylandKeyboard::try_new(&self.globals, &self.qh, seat, keymap_info)
             {
                 return Ok(Box::new(ptr));
             }
-
-            let remote_desktop = RemoteDesktop::builder()
-                .pointer(true)
-                .screencast(true)
-                .try_build()?;
-
-            let portal_ptr = PortalPointer::new(remote_desktop);
-            Ok(Box::new(portal_ptr))
         }
-        #[cfg(not(feature = "portals"))]
-        {
-            Ok(Box::new(WaylandPointer::try_new(
+
+        let remote_desktop = RemoteDesktop::builder().keyboard(true).try_build()?;
+        Ok(Box::new(PortalKeyboard::new(remote_desktop)))
+    }
+
+    #[cfg(not(feature = "portals"))]
+    /// # Errors
+    ///
+    /// No seat was found
+    /// Keymap information was unavailable
+    pub fn virtual_keyboard(&self) -> anyhow::Result<Box<dyn VirtualKeyboard>> {
+        let Some(seat) = self.seat.as_ref() else {
+            return Err(anyhow::anyhow!("No seat provided for Wayland keyboard"));
+        };
+
+        let keymap_guard = self.keymap_info.lock().unwrap();
+        let Some(keymap_info) = keymap_guard.as_ref() else {
+            return Err(anyhow::anyhow!(
+                "No keymap information available. Make sure a keyboard is connected and the keymap event has been received."
+            ));
+        };
+        Ok(Box::new(WaylandKeyboard::try_new(
+            &self.globals,
+            &self.qh,
+            seat,
+            keymap_info,
+        )?))
+    }
+
+    #[cfg(feature = "portals")]
+    /// # Errors
+    ///
+    /// Lack of support for virtual pointer protocol in compositor
+    /// Lack of `RemoteDesktop` interface support in xdg-desktop-portal
+    pub fn virtual_pointer(&self) -> anyhow::Result<Box<dyn VirtualPointer>> {
+        if !self.force_portal
+            && let Ok(ptr) = WaylandPointer::try_new(
                 &self.globals,
                 &self.qh,
                 self.seat.as_ref(),
                 self.outputs.clone(),
-            )?))
+            )
+        {
+            return Ok(Box::new(ptr));
         }
+
+        let remote_desktop = RemoteDesktop::builder()
+            .pointer(true)
+            .screencast(true)
+            .try_build()?;
+
+        let portal_ptr = PortalPointer::new(remote_desktop);
+        Ok(Box::new(portal_ptr))
+    }
+
+    #[cfg(not(feature = "portals"))]
+    /// # Errors
+    ///
+    /// Lack of support for virtual pointer protocol in compositor
+    pub fn virtual_pointer(&self) -> anyhow::Result<Box<dyn VirtualPointer>> {
+        Ok(Box::new(WaylandPointer::try_new(
+            &self.globals,
+            &self.qh,
+            self.seat.as_ref(),
+            self.outputs.clone(),
+        )?))
     }
 }
 
@@ -207,7 +224,7 @@ impl Dispatch<wl_keyboard::WlKeyboard, ()> for Whydotool {
             wl_keyboard::Event::Keymap { format, fd, size } => {
                 let keymap_info = KeymapInfo {
                     format: format.into_result().unwrap(),
-                    fd: fd.into(),
+                    fd,
                     size,
                 };
                 if let Ok(mut keymap_guard) = state.keymap_info.lock() {

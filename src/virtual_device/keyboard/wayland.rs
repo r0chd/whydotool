@@ -1,16 +1,12 @@
 use super::traits::VirtualKeyboard;
-use crate::{Whydotool, KeymapInfo};
+use crate::{KeymapInfo, Whydotool};
 use std::os::fd::AsFd;
-use wayland_client::{
-    QueueHandle,
-    globals::GlobalList,
-    protocol::wl_seat,
-};
+use wayland_client::{QueueHandle, globals::GlobalList, protocol::wl_seat};
 use wayland_protocols_misc::zwp_virtual_keyboard_v1::client::{
     zwp_virtual_keyboard_manager_v1, zwp_virtual_keyboard_v1,
 };
 use xkbcommon::xkb::Keycode;
-use xkbcommon::xkb::{self, KeyDirection, KEYMAP_COMPILE_NO_FLAGS};
+use xkbcommon::xkb::{self, KEYMAP_COMPILE_NO_FLAGS, KeyDirection};
 
 pub struct WaylandKeyboard {
     virtual_keyboard: zwp_virtual_keyboard_v1::ZwpVirtualKeyboardV1,
@@ -46,7 +42,11 @@ impl WaylandKeyboard {
         };
         let xkb_state = xkb::State::new(xkb_keymap.as_ref().unwrap());
 
-        virtual_keyboard.keymap(keymap_info.format.into(), keymap_info.fd.as_fd(), keymap_info.size);
+        virtual_keyboard.keymap(
+            keymap_info.format.into(),
+            keymap_info.fd.as_fd(),
+            keymap_info.size,
+        );
 
         Ok(Self {
             virtual_keyboard,
@@ -63,7 +63,7 @@ impl VirtualKeyboard for WaylandKeyboard {
     fn key(&mut self, key: Keycode, state: KeyDirection) {
         let raw_state = match state {
             KeyDirection::Down => 1,
-            _ => 0,
+            KeyDirection::Up => 0,
         };
 
         self.xkb_state.update_key(key, state);

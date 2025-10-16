@@ -1,3 +1,5 @@
+use crate::portal::screencast::ScreenCast;
+
 use super::{request, screencast, util};
 use anyhow::Context;
 use std::collections::HashMap;
@@ -116,10 +118,14 @@ impl RemoteDesktop {
         self.streams.as_ref()
     }
 
-    pub fn notify_keyboard_keycode(&self, key: Keycode, state: KeyDirection) -> anyhow::Result<()> {
+    pub fn notify_keyboard_keycode(
+        &self,
+        key: Keycode,
+        state: &KeyDirection,
+    ) -> anyhow::Result<()> {
         let raw_state = match state {
             KeyDirection::Down => 1,
-            _ => 0,
+            KeyDirection::Up => 0,
         };
 
         self.proxy.notify_keyboard_keycode(
@@ -181,7 +187,7 @@ impl RemoteDesktop {
     pub fn open_pipewire_remote(&self) -> anyhow::Result<OwnedFd> {
         self.screencast
             .as_ref()
-            .map(|screencast| screencast.open_pipewire_remote())
+            .map(ScreenCast::open_pipewire_remote)
             .context("")
             .flatten()
     }

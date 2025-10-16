@@ -1,6 +1,6 @@
 use super::traits::VirtualKeyboard;
 use crate::portal::remote_desktop::RemoteDesktop;
-use xkbcommon::xkb::{self, KeyDirection, Keycode, KEYMAP_COMPILE_NO_FLAGS};
+use xkbcommon::xkb::{self, KEYMAP_COMPILE_NO_FLAGS, KeyDirection, Keycode};
 
 pub struct PortalKeyboard {
     xkb_state: xkb::State,
@@ -37,6 +37,7 @@ impl VirtualKeyboard for PortalKeyboard {
 
     fn key(&mut self, key: Keycode, state: KeyDirection) {
         // xkbcommon doesn't implement Copy for KeyDirection
+        #[allow(clippy::needless_match)]
         let state_2 = match state {
             KeyDirection::Down => KeyDirection::Down,
             KeyDirection::Up => KeyDirection::Up,
@@ -45,7 +46,7 @@ impl VirtualKeyboard for PortalKeyboard {
         self.xkb_state.update_key(key, state);
 
         self.remote_desktop
-            .notify_keyboard_keycode(key, state_2)
+            .notify_keyboard_keycode(key, &state_2)
             .unwrap();
     }
 }
