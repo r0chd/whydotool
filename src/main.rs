@@ -87,7 +87,7 @@ fn main() -> anyhow::Result<()> {
                 virtual_keyboard.key(keycode, key_press.pressed);
 
                 std::thread::sleep(Duration::from_millis(
-                    key_delay.map_or(whydotool.key_delay() as u64, |delay| delay),
+                    key_delay.unwrap_or(whydotool.key_delay() as u64),
                 ));
             }
         }
@@ -126,7 +126,7 @@ fn main() -> anyhow::Result<()> {
 
                         virtual_keyboard.key(keycode, xkb::KeyDirection::Down);
                         std::thread::sleep(Duration::from_millis(
-                            key_hold.map_or(whydotool.key_delay() as u64, |delay| delay),
+                            key_hold.unwrap_or(whydotool.key_delay() as u64),
                         ));
                         virtual_keyboard.key(keycode, xkb::KeyDirection::Up);
 
@@ -139,13 +139,13 @@ fn main() -> anyhow::Result<()> {
                         whydotool.roundtrip()?;
 
                         std::thread::sleep(Duration::from_millis(
-                            key_delay.map_or(whydotool.key_delay() as u64, |delay| delay),
+                            key_delay.unwrap_or(whydotool.key_delay() as u64),
                         ));
                     }
                 }
 
                 std::thread::sleep(Duration::from_millis(
-                    next_delay.map_or(whydotool.key_delay() as u64, |delay| delay),
+                    next_delay.unwrap_or(whydotool.key_delay() as u64),
                 ));
             }
         }

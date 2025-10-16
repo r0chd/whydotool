@@ -64,7 +64,7 @@ impl RemoteDesktopBuilder {
             [("types", selected_device_mask.into())].into(),
         )?;
 
-        request.next_response().unwrap().args()?;
+        request.next_response().unwrap();
 
         let screencast = if self.enable_screencast {
             let screencast =

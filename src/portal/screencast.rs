@@ -16,10 +16,7 @@ impl ScreenCast {
     ) -> anyhow::Result<Self> {
         let screencast_proxy = ScreenCastProxyBlocking::new(conn)?;
 
-        screencast_proxy.select_sources(
-            &session_handle,
-            [("types", 1u32.into()), ("multiple", true.into())].into(),
-        )?;
+        screencast_proxy.select_sources(&session_handle, HashMap::new())?;
 
         request.next_response().context("Response not found")?;
 
