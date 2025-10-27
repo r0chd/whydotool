@@ -183,7 +183,7 @@ impl Whydotool {
     /// No seat was found
     /// Keymap information was unavailable
     pub fn virtual_keyboard(&self) -> anyhow::Result<Box<dyn VirtualKeyboard>> {
-        let Some(seat) = self.state.seat.as_ref() else {
+        let Some(seat) = self.seat.as_ref() else {
             return Err(anyhow::anyhow!("No seat provided for Wayland keyboard"));
         };
 
