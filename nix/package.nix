@@ -5,13 +5,14 @@
   libxkbcommon,
   wayland,
   pipewire,
-  ydotoolCompat ? false,
-  portals ? false,
+  portals ? true,
+  llvmPackages_20,
+  clangStdenv,
 }:
 let
   cargoToml = builtins.fromTOML (builtins.readFile ../Cargo.toml);
 in
-rustPlatform.buildRustPackage {
+rustPlatform.buildRustPackage.override { stdenv = clangStdenv; } {
   pname = "whydotool";
   inherit (cargoToml.package) version;
 
@@ -43,11 +44,9 @@ rustPlatform.buildRustPackage {
     pipewire
   ];
 
-  cargoFeatures = lib.optionals portals [ "portals" ];
+  LIBCLANG_PATH = "${llvmPackages_20.libclang.lib}/lib";
 
-  postInstall = lib.optionalString ydotoolCompat ''
-    ln -s $out/bin/whydotool $out/bin/ydotool
-  '';
+  cargoFeatures = lib.optionals portals [ "portals" ];
 
   meta = {
     description = "Wayland-native command-line automation tool.";

@@ -27,3 +27,4 @@ ctrlc = "3.5.0"
 
 [features]
 portals = ["dep:pipewire", "dep:zbus", "dep:rand"]
+default = ["portals"]
