@@ -2,7 +2,7 @@
 
 A Wayland-native command-line automation tool.
 
-Inspired by [ydotool](https://github.com/ReimuNotMoe/ydotool), it simulates keyboard and mouse input using native Wayland protocols, no root privileges, no daemons, no kernel hacks.
+Inspired by [ydotool](https://github.com/ReimuNotMoe/ydotool), it simulates keyboard and mouse input using native Wayland protocols.
 
 ## Features
 
@@ -36,20 +36,30 @@ See the [list of supported backends](https://wiki.archlinux.org/title/XDG_Deskto
 
 If your compositor doesn't support the specific protocols above, it will likely work through the portal interface. Check the linked compatibility tables to verify support for your compositor.
 
-## Optional Features
+### Build
 
-### `portals` (disabled by default)
-
-The `portals` backend enables input injection via the `xdg-desktop-portal` RemoteDesktop interface.
-This is useful if your compositor doesn’t support the native virtual input protocols, like GNOME, which supports neither, or KDE Plasma, which lacks the virtual-keyboard protocol.
-
-Build with:
+Clone the repository and enter it:
 
 ```
-cargo build --features portals
+git clone https://forgejo.r0chd.pl/r0chd/whydotool
+cd whydotool
 ```
 
-enabling portal drags in a bunch of heavy dependencies such as zbus and PipeWire, which significantly increases the final binary size and compilation times.
+To build with the default configuration:
+
+```
+cargo build --release
+```
+
+To explicitly disable portal support:
+
+```
+cargo build --no-default-features --release
+```
+
+Disabling portal support reduces dependencies and binary size, but limits compatibility to compositors that implement the native virtual input protocols.
+
+After building binary can be found at `./target/release/whydotool`
 
 ## Examples
 
