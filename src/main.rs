@@ -10,7 +10,7 @@ use wayland_client::protocol::wl_pointer::ButtonState;
 use xkbcommon::xkb;
 
 fn main() -> anyhow::Result<()> {
-    let cli = Cli::try_parse()?;
+    let cli = Cli::parse();
 
     let mut whydotool = Whydotool::try_new()?;
     #[cfg(feature = "portals")]
